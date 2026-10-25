@@ -10,16 +10,10 @@
 
 using namespace testsupport;
 
-namespace {
-saturnfs::DiscImage open_synthetic(const std::string& tag, const SyntheticIso& iso) {
-    return saturnfs::DiscImage::open(iso.write(make_temp_dir(tag)));
-}
-}  // namespace
-
 TEST_CASE("list_files percorre a raiz e subdiretórios sem o sufixo ;1") {
     SyntheticIso iso("T-9527G", "V1.400");
     iso.add("A.TXT", "olá").add("DIR/B.BIN", "dados");
-    auto disc = open_synthetic("iso1", iso);
+    auto disc = open_disc(iso, "iso1");
 
     auto files = saturnfs::list_files(disc);
 
@@ -34,7 +28,7 @@ TEST_CASE("read_file devolve os bytes do arquivo, inclusive os que cruzam setore
     big[4999] = 'Z';
     SyntheticIso iso("T-9527G", "V1.400");
     iso.add("BIG.BIN", big);
-    auto disc = open_synthetic("iso2", iso);
+    auto disc = open_disc(iso, "iso2");
 
     auto files = saturnfs::list_files(disc);
     auto bytes = saturnfs::read_file(disc, files.at(0));
@@ -46,7 +40,7 @@ TEST_CASE("read_file devolve os bytes do arquivo, inclusive os que cruzam setore
 TEST_CASE("list_files ignora entradas de nome '..' (sem escapar da pasta)") {
     SyntheticIso iso("T-9527G", "V1.400");
     iso.add("A.TXT", "a").add("../EVIL", "x");
-    auto disc = open_synthetic("iso3", iso);
+    auto disc = open_disc(iso, "iso3");
 
     auto files = saturnfs::list_files(disc);
 
@@ -56,7 +50,7 @@ TEST_CASE("list_files ignora entradas de nome '..' (sem escapar da pasta)") {
 
 TEST_CASE("read_header lê produto e versão do setor 0") {
     SyntheticIso iso("T-9527G", "V1.400");
-    auto disc = open_synthetic("iso4", iso);
+    auto disc = open_disc(iso, "iso4");
 
     auto header = saturnfs::read_header(disc);
 

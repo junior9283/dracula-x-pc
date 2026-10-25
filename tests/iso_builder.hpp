@@ -3,9 +3,14 @@
 #include <set>
 #include <string>
 
+#include "saturnfs/image.hpp"
 #include "support.hpp"
 
 namespace testsupport {
+
+inline size_t sector_count(const std::string& content) {
+    return std::max<size_t>(1, (content.size() + saturnfs::kUserSectorSize - 1) / saturnfs::kUserSectorSize);
+}
 
 using Sector = std::vector<uint8_t>;
 
@@ -37,7 +42,7 @@ public:
     }
 
     std::vector<Sector> sectors() const {
-        std::vector<Sector> out(17, Sector(2048, 0));
+        std::vector<Sector> out(17, Sector(saturnfs::kUserSectorSize, 0));
         auto field = [&](size_t off, const std::string& text, size_t width) {
             std::string padded = text + std::string(width - text.size(), ' ');
             std::memcpy(out[0].data() + off, padded.data(), width);
@@ -60,57 +65,57 @@ public:
         std::map<std::string, uint32_t> file_lba;
         for (const auto& [path, content] : files_) {
             file_lba[path] = next;
-            next += std::max<size_t>(1, (content.size() + 2047) / 2048);
+            next += sector_count(content);
         }
 
-        Sector root(2048, 0);
+        Sector root(saturnfs::kUserSectorSize, 0);
         size_t pos = 0;
-        put_record(root, pos, std::string(1, '\0'), 17, 2048, true);
-        put_record(root, pos, std::string(1, '\1'), 17, 2048, true);
-        for (const auto& d : dirs) put_record(root, pos, d, dir_lba[d], 2048, true);
+        put_record(root, pos, std::string(1, '\0'), 17, saturnfs::kUserSectorSize, true);
+        put_record(root, pos, std::string(1, '\1'), 17, saturnfs::kUserSectorSize, true);
+        for (const auto& d : dirs) put_record(root, pos, d, dir_lba[d], saturnfs::kUserSectorSize, true);
         for (const auto& [path, content] : files_)
             if (path.find('/') == std::string::npos) put_record(root, pos, path + ";1", file_lba[path], content.size(), false);
         out.push_back(root);
 
         for (const auto& d : dirs) {
-            Sector sub(2048, 0);
+            Sector sub(saturnfs::kUserSectorSize, 0);
             size_t p = 0;
-            put_record(sub, p, std::string(1, '\0'), dir_lba[d], 2048, true);
-            put_record(sub, p, std::string(1, '\1'), 17, 2048, true);
+            put_record(sub, p, std::string(1, '\0'), dir_lba[d], saturnfs::kUserSectorSize, true);
+            put_record(sub, p, std::string(1, '\1'), 17, saturnfs::kUserSectorSize, true);
             for (const auto& [path, content] : files_)
                 if (path.rfind(d + "/", 0) == 0) put_record(sub, p, path.substr(d.size() + 1) + ";1", file_lba[path], content.size(), false);
             out.push_back(sub);
         }
         for (const auto& [path, content] : files_) {
-            size_t n = std::max<size_t>(1, (content.size() + 2047) / 2048);
+            size_t n = sector_count(content);
             for (size_t i = 0; i < n; ++i) {
-                Sector s(2048, 0);
-                size_t chunk = content.size() > i * 2048 ? std::min<size_t>(2048, content.size() - i * 2048) : 0;
-                std::memcpy(s.data(), content.data() + i * 2048, chunk);
+                Sector s(saturnfs::kUserSectorSize, 0);
+                size_t chunk = content.size() > i * saturnfs::kUserSectorSize ? std::min<size_t>(saturnfs::kUserSectorSize, content.size() - i * saturnfs::kUserSectorSize) : 0;
+                std::memcpy(s.data(), content.data() + i * saturnfs::kUserSectorSize, chunk);
                 out.push_back(s);
             }
         }
 
-        Sector pvd(2048, 0);
+        Sector pvd(saturnfs::kUserSectorSize, 0);
         pvd[0] = 1;
         std::memcpy(pvd.data() + 1, "CD001", 5);
         pvd[6] = 1;
         size_t rp = 156;
-        put_record(pvd, rp, std::string(1, '\0'), 17, 2048, true);
+        put_record(pvd, rp, std::string(1, '\0'), 17, saturnfs::kUserSectorSize, true);
         out[16] = pvd;
         return out;
     }
 
-    // Grava .bin + .cue em `dir` e devolve o caminho do .cue.
-    std::filesystem::path write(const std::filesystem::path& dir) const {
-        write_bin(dir / "d.bin", sectors());
-        write_text(dir / "d.cue", "FILE \"d.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n");
-        return dir / "d.cue";
-    }
+    // Grava o disco em `dir` e devolve o caminho do .cue.
+    std::filesystem::path write(const std::filesystem::path& dir) const { return write_single_track_disc(dir, sectors()); }
 
 private:
     std::string product_, version_;
     std::map<std::string, std::string> files_;
 };
+
+inline saturnfs::DiscImage open_disc(const SyntheticIso& iso, const std::string& tag) {
+    return saturnfs::DiscImage::open(iso.write(make_temp_dir(tag)));
+}
 
 }  // namespace testsupport

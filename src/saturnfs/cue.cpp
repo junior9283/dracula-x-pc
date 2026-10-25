@@ -1,5 +1,8 @@
 #include "saturnfs/cue.hpp"
 
+#include "saturnfs/layout.hpp"
+
+#include <cstdio>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -7,8 +10,6 @@
 
 namespace saturnfs {
 namespace {
-
-constexpr uintmax_t kRawSector = 2352;
 
 std::string unquote(const std::string& rest) {
     auto first = rest.find('"');
@@ -45,7 +46,7 @@ std::vector<Track> parse_cue(const std::filesystem::path& cue) {
             file = cue.parent_path() / unquote(rest);
             if (!std::filesystem::exists(file)) throw std::runtime_error("arquivo da faixa não encontrado: " + file.filename().string());
             file_base_lba = next_file_base;
-            next_file_base += static_cast<uint32_t>(std::filesystem::file_size(file) / kRawSector);
+            next_file_base += static_cast<uint32_t>(std::filesystem::file_size(file) / kRawSectorSize);
         } else if (keyword == "TRACK") {
             std::istringstream fields(rest);
             int number = 0;

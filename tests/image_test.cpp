@@ -6,11 +6,8 @@
 using namespace testsupport;
 
 namespace {
-std::filesystem::path make_disc(const std::string& tag, std::vector<std::vector<uint8_t>> sectors) {
-    auto dir = make_temp_dir(tag);
-    write_bin(dir / "d.bin", sectors);
-    write_text(dir / "d.cue", "FILE \"d.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n");
-    return dir / "d.cue";
+std::filesystem::path make_disc(const std::string& tag, const std::vector<std::vector<uint8_t>>& sectors) {
+    return write_single_track_disc(make_temp_dir(tag), sectors);
 }
 }  // namespace
 
@@ -34,7 +31,7 @@ TEST_CASE("read_user_sector lança para setor além do fim do .bin") {
 
 TEST_CASE("open lança para .bin truncado no meio de um setor") {
     auto cue = make_disc("img3", {{1}, {2}});
-    std::filesystem::resize_file(cue.parent_path() / "d.bin", 2352 + 100);
+    std::filesystem::resize_file(cue.parent_path() / "d.bin", saturnfs::kRawSectorSize + 100);
 
     REQUIRE_THROWS(saturnfs::DiscImage::open(cue));
 }

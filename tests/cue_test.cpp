@@ -10,7 +10,7 @@ using saturnfs::Track;
 TEST_CASE("parse_cue lê duas faixas com nome contendo espaços e parênteses") {
     auto dir = make_temp_dir("cue1");
     write_bin(dir / "Jogo (Japan) (Track 1).bin", {{1}, {2}, {3}});
-    write_text(dir / "Jogo (Japan) (Track 2).bin", std::string(2352 * 2, '\0'));
+    write_text(dir / "Jogo (Japan) (Track 2).bin", std::string(saturnfs::kRawSectorSize * 2, '\0'));
     write_text(dir / "jogo.cue",
                "FILE \"Jogo (Japan) (Track 1).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n"
                "FILE \"Jogo (Japan) (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n");
