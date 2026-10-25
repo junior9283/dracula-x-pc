@@ -48,13 +48,13 @@ TEST_CASE("boot carrega o IP em 0x06002000 e começa a executar em 0x06002100") 
     CHECK(m.master().state().sr == 0xF0u);                // interrupções mascaradas até o IP liberar
 }
 
-TEST_CASE("BIOS: o serviço de vetor (slot 0x06000300) grava o handler na tabela de vetores") {
+TEST_CASE("BIOS: o serviço de vetor (slot 0x06000300) registra o tratador na tabela da BIOS") {
     Machine m(make_disc("m2"));
     m.boot();
 
     call_slot(m, 0x06000300, 0x40, 0x060022E4);
 
-    CHECK(m.bus().read32(0x06000000 + 0x40 * 4) == 0x060022E4u);
+    CHECK(m.bus().read32(saturn::BiosHle::kHandlerTable + 0x40 * 4) == 0x060022E4u);
     CHECK(m.master().state().pc == 0x06003000u);          // retornou ao chamador (PR)
 }
 
@@ -149,4 +149,34 @@ TEST_CASE("BIOS tolerante: serviço desconhecido (ROM ou RAM) é registrado com 
     CHECK(m.bios_calls()[0].args[1] == 0x2222u);
     CHECK(m.bios_calls()[1].slot == 0x06000310u);
     CHECK(m.bios_calls()[1].return_address == 0x06003000u);
+}
+
+TEST_CASE("tratador registrado pelo serviço é chamado como sub-rotina (rts); a BIOS restaura registradores e faz rte") {
+    Machine m(make_disc("m11"));
+    m.boot();
+    m.bus().write16(0x06002900, 0xE107);   // mov #7,r1   (o tratador suja r1)
+    m.bus().write16(0x06002902, 0x000B);   // rts
+    m.bus().write16(0x06002904, 0x0009);   // nop (slot)
+    call_slot(m, 0x06000300, 0x40, 0x06002900);   // registra o tratador do VBlank-IN
+
+    auto& s = m.master().state();
+    s.pc = 0x06002100;
+    s.sr = 0;
+    s.r[1] = 0x1234;
+    s.mach = 0xAAAA;
+    m.scu().write(0xA0, 4, 0);
+    m.scu().raise(saturn::Scu::Interrupt::VBlankIn);
+
+    m.step_master();                                  // a CPU entra no vetor (gatilho do trampolim)
+    m.step_master();                                  // o trampolim salva o contexto e chama o tratador
+    CHECK(s.pc == 0x06002900u);
+    m.step_master();                                  // mov #7,r1
+    CHECK(s.r[1] == 7u);
+    m.step_master();                                  // rts (com slot)
+    m.step_master();                                  // gatilho de retorno: restaura e faz rte
+
+    CHECK(s.pc == 0x06002100u);
+    CHECK(s.r[1] == 0x1234u);                         // r1 restaurado
+    CHECK(s.mach == 0xAAAAu);
+    CHECK(s.sr == 0u);                                // SR do rte
 }

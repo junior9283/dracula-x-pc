@@ -12,6 +12,7 @@ constexpr uint32_t kFirstInterruptVector = 0x40;
 constexpr uint32_t kSystemVariablesBegin = 0x06000240, kSystemVariablesEnd = 0x06000260;  // dados, não ponteiros: começam em 0
 constexpr size_t kMaxLoggedCalls = 100000;
 
+
 std::string hex(uint32_t v) {
     char buffer[16];
     std::snprintf(buffer, sizeof buffer, "0x%08X", v);
@@ -21,6 +22,13 @@ std::string hex(uint32_t v) {
 }  // namespace
 
 BiosHle::BiosHle(Bus& bus, Scu& scu) : bus_(bus), scu_(scu) {}
+
+void BiosHle::return_from_interrupt(sh2::Sh2State& s) {  // rte: PC e SR empilhados pela entrada da exceção
+    s.pc = bus_.read32(s.r[15]);
+    s.r[15] += 4;
+    s.sr = bus_.read32(s.r[15]) & sh2::kSrWritable;
+    s.r[15] += 4;
+}
 
 void BiosHle::install(sh2::Cpu& cpu) {
     // Tabela de ponteiros da ROM (0x00000000+): cada entrada aponta para o seu próprio gatilho.
@@ -35,7 +43,7 @@ void BiosHle::install(sh2::Cpu& cpu) {
 
     // Vetores de interrupção: handler padrão do BIOS (rte); vetores de exceção: um gatilho fatal por vetor.
     for (uint32_t vector = 0; vector < kVectorCount; ++vector)
-        bus_.write32(kVectorBase + vector * 4, vector >= kFirstInterruptVector ? trap_address(kDefaultVectorIndex) : trap_address(kExceptionIndexBase + vector));
+        bus_.write32(kVectorBase + vector * 4, vector >= kFirstInterruptVector ? trap_address(kInterruptIndexBase + vector - kFirstInterruptVector) : trap_address(kExceptionIndexBase + vector));
     cpu.state().vbr = kVectorBase;
 }
 
@@ -44,11 +52,26 @@ bool BiosHle::handle(sh2::Cpu& cpu) {
     if (!is_trap(s.pc)) return false;
     const uint32_t index = (s.pc - kTrapBase) / 4;
 
-    if (index == kDefaultVectorIndex) {  // rte: o jogo não instalou handler para esse vetor
-        s.pc = bus_.read32(s.r[15]);
-        s.r[15] += 4;
-        s.sr = bus_.read32(s.r[15]) & sh2::kSrWritable;
-        s.r[15] += 4;
+    if (index >= kInterruptIndexBase && index < kInterruptIndexBase + (kVectorCount - kFirstInterruptVector)) {
+        // Trampolim do BIOS: chama o tratador registrado pelo jogo como sub-rotina; sem tratador, só retorna da interrupção.
+        const uint32_t handler = bus_.read32(kHandlerTable + (kFirstInterruptVector + index - kInterruptIndexBase) * 4);
+        if (handler == 0) { return_from_interrupt(s); return true; }
+        s.r[15] -= 4 * kFrameWords;
+        for (uint32_t i = 0; i < 8; ++i) bus_.write32(s.r[15] + 4 * i, s.r[i]);
+        bus_.write32(s.r[15] + 32, s.pr);
+        bus_.write32(s.r[15] + 36, s.mach);
+        bus_.write32(s.r[15] + 40, s.macl);
+        s.pr = trap_address(kInterruptReturnIndex);
+        s.pc = handler;
+        return true;
+    }
+    if (index == kInterruptReturnIndex) {  // o tratador voltou: restaura o contexto salvo e executa o rte
+        for (uint32_t i = 0; i < 8; ++i) s.r[i] = bus_.read32(s.r[15] + 4 * i);
+        s.pr = bus_.read32(s.r[15] + 32);
+        s.mach = bus_.read32(s.r[15] + 36);
+        s.macl = bus_.read32(s.r[15] + 40);
+        s.r[15] += 4 * kFrameWords;
+        return_from_interrupt(s);
         return true;
     }
     if (index >= kExceptionIndexBase)
@@ -57,7 +80,7 @@ bool BiosHle::handle(sh2::Cpu& cpu) {
     const uint32_t slot = index < kRamSlotIndex ? index * 4 : kServiceTableBase + (index - kRamSlotIndex) * 4;
     switch (slot) {
         case kSlotSetVector:
-            bus_.write32(kVectorBase + s.r[4] * 4, s.r[5]);
+            bus_.write32(kHandlerTable + s.r[4] * 4, s.r[5]);
             break;
         case kSlotScuMask: {
             const uint32_t old = scu_.read(0xA0, 4);

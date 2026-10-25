@@ -107,3 +107,18 @@ TEST_CASE("ram_at devolve o trecho contíguo da RAM e vazio fora dela") {
     CHECK(bus.ram_at(0x06000020, 0x200000).empty());  // atravessa o fim da RAM física
     CHECK(bus.ram_at(0x04000000, 4).empty());
 }
+
+TEST_CASE("acessos não mapeados são contados por página de 4 KiB (leitura e escrita)") {
+    Bus bus;
+    saturn::map_standard_memory(bus);
+
+    bus.read32(0x05D00000);
+    bus.write16(0x05D00004, 1);
+    bus.read8(0x05D00FFF);
+    bus.read32(0x05F80000);
+
+    const auto& pages = bus.unmapped_pages();
+    REQUIRE(pages.size() == 2);
+    CHECK(pages.at(0x05D00000) == 3u);
+    CHECK(pages.at(0x05F80000) == 1u);
+}

@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -39,6 +40,8 @@ public:
 
     uint64_t unmapped_count() const { return unmapped_count_; }
     std::optional<uint32_t> first_unmapped() const { return first_unmapped_; }
+    // Acessos não mapeados por página de 4 KiB (endereço físico do início da página).
+    const std::map<uint32_t, uint64_t>& unmapped_pages() const { return unmapped_pages_; }
 
     struct Page;
     struct Storage;
@@ -51,6 +54,7 @@ private:
     std::unique_ptr<Storage> storage_;
     uint64_t unmapped_count_ = 0;
     std::optional<uint32_t> first_unmapped_;
+    std::map<uint32_t, uint64_t> unmapped_pages_;
 };
 
 // Work RAM-L (1 MB em 0x00200000) e Work RAM-H (1 MB em 0x06000000, repetida até 0x07FFFFFF).

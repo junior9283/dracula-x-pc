@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -5,6 +6,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "saturn/machine.hpp"
 #include "saturnfs/image.hpp"
@@ -61,8 +63,14 @@ int main(int argc, char** argv) {
 
         std::cout << "quadros concluídos: " << completed << " (de " << frames << ")\n";
         std::cout << "endereços de instrução distintos executados: " << machine.recorder().count() << '\n';
-        if (auto first = machine.bus().first_unmapped())
+        if (auto first = machine.bus().first_unmapped()) {
             std::cout << "acessos a endereço não mapeado: " << machine.bus().unmapped_count() << " (primeiro: " << hex(*first) << ")\n";
+            std::vector<std::pair<uint64_t, uint32_t>> pages;
+            for (const auto& [page, count] : machine.bus().unmapped_pages()) pages.emplace_back(count, page);
+            std::sort(pages.rbegin(), pages.rend());
+            for (size_t i = 0; i < pages.size() && i < 12; ++i) std::cout << "  página " << hex(pages[i].second) << ": " << pages[i].first << " acessos\n";
+        }
+        print_state(machine);
         std::map<uint32_t, std::pair<size_t, saturn::BiosHle::Call>> by_slot;   // contagem e a primeira chamada de cada slot
         for (const auto& call : machine.bios_calls()) {
             auto& entry = by_slot.try_emplace(call.slot, 0, call).first->second;

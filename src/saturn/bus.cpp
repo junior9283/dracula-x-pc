@@ -67,6 +67,7 @@ void Bus::map_io(uint32_t base, uint32_t size, IoDevice& device) {
 uint32_t Bus::unmapped(uint32_t address) {
     ++unmapped_count_;
     if (!first_unmapped_) first_unmapped_ = address;
+    ++unmapped_pages_[address & ~S::kPageMask];
     return 0;
 }
 

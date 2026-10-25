@@ -24,6 +24,7 @@ class BiosHle {
 public:
     static constexpr uint32_t kVectorBase = 0x06000000;
     static constexpr uint32_t kServiceTableBase = 0x06000200, kServiceTableEnd = 0x06000400;
+    static constexpr uint32_t kHandlerTable = 0x06000A00;                       // tratadores registrados pelo jogo, por vetor (4 bytes cada)
     static constexpr uint32_t kRomTableSize = 0x1000;                           // ponteiros de serviço na ROM (0x00000000–0x00000FFF)
     static constexpr uint32_t kTrapBase = 0x00008000, kTrapEnd = 0x0000A000;    // 4 bytes por gatilho, na área da ROM da BIOS
 
@@ -48,8 +49,11 @@ public:
     const std::vector<Call>& calls() const { return calls_; }
 
 private:
-    // Índice do gatilho: [0, 0x400) ponteiros da ROM (índice = offset/4); [0x400, 0x480) slots de RAM; 0x500 = rte; 0x600+v = vetor v.
-    static constexpr uint32_t kRamSlotIndex = 0x400, kDefaultVectorIndex = 0x500, kExceptionIndexBase = 0x600;
+    void return_from_interrupt(sh2::Sh2State& state);
+    // Índice do gatilho: [0, 0x400) ponteiros da ROM (índice = offset/4); [0x400, 0x480) slots de RAM; [0x500, 0x540) trampolim do
+    // vetor 0x40+i; 0x580 = retorno do trampolim; 0x600+v = exceção do vetor v.
+    static constexpr uint32_t kRamSlotIndex = 0x400, kInterruptIndexBase = 0x500, kInterruptReturnIndex = 0x580, kExceptionIndexBase = 0x600;
+    static constexpr uint32_t kFrameWords = 11;  // r0–r7, PR, MACH, MACL salvos pelo trampolim
     static uint32_t trap_address(uint32_t index) { return kTrapBase + 4 * index; }
 
     Bus& bus_;
