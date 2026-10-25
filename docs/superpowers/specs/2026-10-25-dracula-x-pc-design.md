@@ -74,3 +74,9 @@ Nomes de módulos, formato interno do pacote de dados, layout dos menus, arte do
 ## Respostas do usuário à revisão
 - **Prioridade de corte**: a Galeria da trilha sonora pode ficar para depois se o projeto apertar (não é requisito da primeira versão jogável).
 - **Licença / origem do código**: o usuário respondeu "100% nativa de PC" (não nomeou licença). Decisão minha, a confirmar: licença permissiva (MIT) e núcleos escritos do zero, sem copiar código de emuladores GPL (Mednafen, Yabause, Kronos); eles servem só como referência de comportamento observado.
+
+## Revisão após a etapa 1 (decisão do construtor, a confirmar)
+- **Estratégia de CPU invertida:** interpretador SH-2 primeiro (etapa 2), recompilação AOT guiada por traço de execução depois; o interpretador permanece como reserva. Motivo: só 34 % dos bytes de código têm mapa estático (docs/analysis/06-mapa-do-jogo.md). O objetivo do usuário (nativo, sem ISO e sem emulador externo em runtime) não muda.
+- **Camada de CD:** o jogo carrega por nome de arquivo e diretório; o port serve esses acessos a partir do pacote de dados local.
+- **Som:** emular 68000 + SCSP e rodar o driver original (o driver está em `0.BIN`).
+- **Música/galeria:** as 49 faixas já são decodificáveis (IMA ADPCM estéreo, 44,1 kHz inferido); a galeria depende da tabela música→local (24/49 por análise estática, resto por log em execução).
