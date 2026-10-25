@@ -3,6 +3,7 @@
 
 #include "audio/dvi.hpp"
 #include "audio/wav.hpp"
+#include "saturnfs/image.hpp"
 #include "saturnfs/catalog.hpp"
 #include "saturnfs/verify.hpp"
 

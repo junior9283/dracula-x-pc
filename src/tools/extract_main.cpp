@@ -1,6 +1,7 @@
 #include <cstring>
 #include <iostream>
 
+#include "saturnfs/image.hpp"
 #include "saturnfs/extract.hpp"
 #include "saturnfs/verify.hpp"
 

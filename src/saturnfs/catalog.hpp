@@ -4,7 +4,7 @@
 #include <string_view>
 #include <vector>
 
-#include "saturnfs/image.hpp"
+#include "saturnfs/sector_reader.hpp"
 #include "saturnfs/iso9660.hpp"
 
 namespace saturnfs {
@@ -23,7 +23,7 @@ struct CatalogEntry {
 };
 
 // Catálogo de todos os arquivos do disco (lê só os primeiros bytes de cada um).
-std::vector<CatalogEntry> build_catalog(const DiscImage& disc);
+std::vector<CatalogEntry> build_catalog(const SectorReader& source);
 
 const char* kind_name(FileKind kind);
 

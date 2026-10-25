@@ -1,6 +1,7 @@
 #include <iomanip>
 #include <iostream>
 
+#include "saturnfs/image.hpp"
 #include "saturnfs/catalog.hpp"
 #include "saturnfs/overlay.hpp"
 #include "saturnfs/verify.hpp"

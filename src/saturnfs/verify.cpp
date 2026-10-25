@@ -18,8 +18,8 @@ std::string field(const std::array<uint8_t, kUserSectorSize>& s, size_t offset, 
 
 }  // namespace
 
-SaturnHeader read_header(const DiscImage& disc) {
-    auto sector = disc.read_user_sector(0);
+SaturnHeader read_header(const SectorReader& source) {
+    auto sector = source.read_user_sector(0);
     if (std::string_view(reinterpret_cast<const char*>(sector.data()), kMagic.size()) != kMagic)
         throw std::runtime_error("não é um disco de Sega Saturn (cabeçalho ausente)");
     return {field(sector, 0x10, 16), field(sector, 0x20, 10), field(sector, 0x2A, 6), field(sector, 0x30, 8),
@@ -32,9 +32,9 @@ void require_supported_disc(const SaturnHeader& header) {
                                  " (esperado " + std::string(kSupportedProduct) + " " + std::string(kSupportedVersion) + ")");
 }
 
-void require_complete_image(const DiscImage& disc, uint32_t expected_sectors) {
-    if (disc.data_sector_count() != expected_sectors)
-        throw std::runtime_error("imagem incompleta: a faixa de dados tem " + std::to_string(disc.data_sector_count()) +
+void require_complete_image(const SectorReader& source, uint32_t expected_sectors) {
+    if (source.sector_count() != expected_sectors)
+        throw std::runtime_error("imagem incompleta: a faixa de dados tem " + std::to_string(source.sector_count()) +
                                  " setores, esperado " + std::to_string(expected_sectors));
 }
 

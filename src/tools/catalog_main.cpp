@@ -1,6 +1,7 @@
 #include <iostream>
 #include <map>
 
+#include "saturnfs/image.hpp"
 #include "saturnfs/catalog.hpp"
 #include "saturnfs/verify.hpp"
 

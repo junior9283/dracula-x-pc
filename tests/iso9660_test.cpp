@@ -86,8 +86,30 @@ TEST_CASE("list_files rejeita registro cujo tamanho de nome ultrapassa o tamanho
 TEST_CASE("require_complete_image recusa imagem com menos setores de dados que o esperado") {
     SyntheticIso iso("T-9527G", "V1.400");
     auto disc = open_disc(iso, "complete1");
-    auto sectors = disc.data_sector_count();
+    auto sectors = disc.sector_count();
 
     REQUIRE_NOTHROW(saturnfs::require_complete_image(disc, sectors));
     REQUIRE_THROWS_WITH(saturnfs::require_complete_image(disc, sectors + 1), Catch::Matchers::ContainsSubstring("incompleta"));
+}
+
+TEST_CASE("list_directory devolve '.', '..', subdiretórios e arquivos na ordem do disco") {
+    SyntheticIso iso("T-9527G", "V1.400");
+    iso.add("A.TXT", "a").add("DIR/B.BIN", "bb");
+    auto disc = open_disc(iso, "dir-list");
+
+    auto root = saturnfs::root_directory(disc);
+    auto entries = saturnfs::list_directory(disc, root.lba, root.size);
+
+    REQUIRE(entries.size() == 4);
+    CHECK(entries[0].name == ".");   CHECK(entries[0].is_directory);
+    CHECK(entries[1].name == "..");  CHECK(entries[1].is_directory);
+    CHECK(entries[2].name == "DIR"); CHECK(entries[2].is_directory);
+    CHECK(entries[3].name == "A.TXT");
+    CHECK_FALSE(entries[3].is_directory);
+    CHECK(entries[3].size == 1u);
+
+    auto sub = saturnfs::list_directory(disc, entries[2].lba, entries[2].size);
+    REQUIRE(sub.size() == 3);
+    CHECK(sub[2].name == "B.BIN");
+    CHECK(sub[2].size == 2u);
 }

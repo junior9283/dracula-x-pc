@@ -36,12 +36,12 @@ FileKind classify(std::string_view path, std::span<const uint8_t> head) {
     return FileKind::Unknown;
 }
 
-std::vector<CatalogEntry> build_catalog(const DiscImage& disc) {
+std::vector<CatalogEntry> build_catalog(const SectorReader& source) {
     std::vector<CatalogEntry> catalog;
-    for (auto& file : list_files(disc)) {
-        if (!is_in_data_track(disc, file)) continue;
+    for (auto& file : list_files(source)) {
+        if (!is_in_data_track(source, file)) continue;
         // Só o início de cada arquivo interessa ao classificador.
-        auto head = read_file(disc, {file.path, file.lba, std::min<uint32_t>(file.size, kHeadBytes)});
+        auto head = read_file(source, {file.path, file.lba, std::min<uint32_t>(file.size, kHeadBytes)});
         auto kind = classify(file.path, head);
         catalog.push_back({std::move(file), kind});
     }
