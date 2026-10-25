@@ -10,7 +10,7 @@ constexpr uint32_t kSlotScuMask = 0x06000344;         // (IMS & r4) | r5 ; devol
 constexpr uint32_t kVectorCount = 0x80;               // vetores 0–0x7F cabem antes da tabela de serviços (0x06000200)
 constexpr uint32_t kFirstInterruptVector = 0x40;
 constexpr uint32_t kSystemVariablesBegin = 0x06000240, kSystemVariablesEnd = 0x06000260;  // dados, não ponteiros: começam em 0
-constexpr uint32_t kDefaultVectorIndex = 0x100, kExceptionIndexBase = 0x200;
+constexpr size_t kMaxLoggedCalls = 100000;
 
 std::string hex(uint32_t v) {
     char buffer[16];
@@ -23,15 +23,19 @@ std::string hex(uint32_t v) {
 BiosHle::BiosHle(Bus& bus, Scu& scu) : bus_(bus), scu_(scu) {}
 
 void BiosHle::install(sh2::Cpu& cpu) {
-    // Cada slot de serviço aponta para o seu próprio gatilho; as variáveis de sistema ficam zeradas.
+    // Tabela de ponteiros da ROM (0x00000000+): cada entrada aponta para o seu próprio gatilho.
+    rom_table_.assign(kRomTableSize, 0);
+    for (uint32_t i = 0; i < kRomTableSize / 4; ++i)
+        for (int b = 0; b < 4; ++b) rom_table_[i * 4 + b] = (trap_address(i) >> (8 * (3 - b))) & 0xFF;
+    bus_.map_rom(0, rom_table_);
+
+    // Slots de serviço na RAM: um gatilho por slot; as variáveis de sistema ficam zeradas.
     for (uint32_t slot = kServiceTableBase; slot < kServiceTableEnd; slot += 4)
-        bus_.write32(slot, (slot >= kSystemVariablesBegin && slot < kSystemVariablesEnd) ? 0 : trap_for_slot(slot));
+        bus_.write32(slot, (slot >= kSystemVariablesBegin && slot < kSystemVariablesEnd) ? 0 : trap_address(kRamSlotIndex + (slot - kServiceTableBase) / 4));
 
     // Vetores de interrupção: handler padrão do BIOS (rte); vetores de exceção: um gatilho fatal por vetor.
-    for (uint32_t vector = 0; vector < kVectorCount; ++vector) {
-        const uint32_t trap = vector >= kFirstInterruptVector ? kTrapBase + 4 * kDefaultVectorIndex : kTrapBase + 4 * (kExceptionIndexBase + vector);
-        bus_.write32(kVectorBase + vector * 4, trap);
-    }
+    for (uint32_t vector = 0; vector < kVectorCount; ++vector)
+        bus_.write32(kVectorBase + vector * 4, vector >= kFirstInterruptVector ? trap_address(kDefaultVectorIndex) : trap_address(kExceptionIndexBase + vector));
     cpu.state().vbr = kVectorBase;
 }
 
@@ -47,11 +51,10 @@ bool BiosHle::handle(sh2::Cpu& cpu) {
         s.r[15] += 4;
         return true;
     }
-    if (index >= kExceptionIndexBase) {
+    if (index >= kExceptionIndexBase)
         throw MachineError("exceção sem tratamento: vetor " + std::to_string(index - kExceptionIndexBase) + ", PC salvo " + hex(bus_.read32(s.r[15])));
-    }
 
-    const uint32_t slot = kServiceTableBase + index * 4;
+    const uint32_t slot = index < kRamSlotIndex ? index * 4 : kServiceTableBase + (index - kRamSlotIndex) * 4;
     switch (slot) {
         case kSlotSetVector:
             bus_.write32(kVectorBase + s.r[4] * 4, s.r[5]);
@@ -63,7 +66,9 @@ bool BiosHle::handle(sh2::Cpu& cpu) {
             break;
         }
         default:
-            throw MachineError("serviço do BIOS não implementado: slot " + hex(slot) + " (retorno " + hex(s.pr) + ", r4=" + hex(s.r[4]) + ", r5=" + hex(s.r[5]) + ")");
+            if (strict_)
+                throw MachineError("serviço do BIOS não implementado: slot " + hex(slot) + " (retorno " + hex(s.pr) + ", r4=" + hex(s.r[4]) + ", r5=" + hex(s.r[5]) + ")");
+            if (calls_.size() < kMaxLoggedCalls) calls_.push_back({slot, s.pr, {s.r[4], s.r[5], s.r[6], s.r[7]}});
     }
     s.pc = s.pr;  // rts
     return true;

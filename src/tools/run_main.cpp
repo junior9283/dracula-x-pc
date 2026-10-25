@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <string>
 
@@ -29,14 +30,16 @@ void print_state(saturn::Machine& m) {
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::cerr << "uso: dxpc-run <arquivo.cue> [--frames N] [--trace arquivo]\n";
+        std::cerr << "uso: dxpc-run <arquivo.cue> [--frames N] [--trace arquivo] [--lenient-bios]\n";
         return 2;
     }
     int frames = 5;
     std::string trace_file;
+    bool lenient = false;
     for (int i = 2; i < argc; ++i) {
         if (!std::strcmp(argv[i], "--frames") && i + 1 < argc) frames = std::atoi(argv[++i]);
         else if (!std::strcmp(argv[i], "--trace") && i + 1 < argc) trace_file = argv[++i];
+        else if (!std::strcmp(argv[i], "--lenient-bios")) lenient = true;
         else { std::cerr << "argumento desconhecido: " << argv[i] << '\n'; return 2; }
     }
 
@@ -46,6 +49,7 @@ int main(int argc, char** argv) {
         saturnfs::require_complete_image(*disc);
 
         saturn::Machine machine(std::move(disc));
+        machine.set_bios_strict(!lenient);
         machine.boot();
         int completed = 0;
         try {
@@ -59,6 +63,14 @@ int main(int argc, char** argv) {
         std::cout << "endereços de instrução distintos executados: " << machine.recorder().count() << '\n';
         if (auto first = machine.bus().first_unmapped())
             std::cout << "acessos a endereço não mapeado: " << machine.bus().unmapped_count() << " (primeiro: " << hex(*first) << ")\n";
+        std::map<uint32_t, std::pair<size_t, saturn::BiosHle::Call>> by_slot;   // contagem e a primeira chamada de cada slot
+        for (const auto& call : machine.bios_calls()) {
+            auto& entry = by_slot.try_emplace(call.slot, 0, call).first->second;
+            ++entry.first;
+        }
+        for (const auto& [slot, entry] : by_slot)
+            std::cout << "serviço do BIOS (tolerante) slot " << hex(slot) << ": " << entry.first << " chamada(s); 1ª de " << hex(entry.second.return_address)
+                      << " r4=" << hex(entry.second.args[0]) << " r5=" << hex(entry.second.args[1]) << " r6=" << hex(entry.second.args[2]) << '\n';
         for (uint8_t cmd : machine.cd().unknown_commands()) std::cout << "comando de CD block desconhecido: " << hex(cmd) << '\n';
         for (uint8_t cmd : machine.smpc().unknown_commands()) std::cout << "comando de SMPC desconhecido: " << hex(cmd) << '\n';
         if (!trace_file.empty()) {

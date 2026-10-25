@@ -1,6 +1,7 @@
 #pragma once
 #include <functional>
 #include <memory>
+#include <vector>
 
 #include "saturn/bios_hle.hpp"
 #include "saturn/bus.hpp"
@@ -34,6 +35,8 @@ public:
     CdBlock& cd() { return *cd_; }
     sh2::ExecutionRecorder& recorder() { return recorder_; }
     bool slave_running() const { return slave_running_; }
+    void set_bios_strict(bool strict) { bios_.set_strict(strict); }
+    const std::vector<BiosHle::Call>& bios_calls() const { return bios_.calls(); }
     uint64_t frame() const { return timing_.frame(); }
 
     // Observador das interrupções atendidas pelo mestre (nível, vetor).

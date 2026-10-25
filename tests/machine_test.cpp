@@ -126,3 +126,27 @@ TEST_CASE("run_cycles avança o vídeo: um quadro entrega o VBlank-IN ao mestre 
     CHECK(m.frame() == 1);
     CHECK(vblanks >= 1);
 }
+
+TEST_CASE("BIOS: a tabela de ponteiros da ROM (0x5E4) aponta para um gatilho que, no modo estrito, para com o endereço na mensagem") {
+    Machine m(make_disc("m9"));
+    m.boot();
+
+    CHECK_THROWS_WITH(call_slot(m, 0x000005E4), Catch::Matchers::ContainsSubstring("0x000005E4"));
+}
+
+TEST_CASE("BIOS tolerante: serviço desconhecido (ROM ou RAM) é registrado com argumentos e devolve ao chamador") {
+    Machine m(make_disc("m10"));
+    m.boot();
+    m.set_bios_strict(false);
+
+    call_slot(m, 0x000005E8, 0x1111, 0x2222);
+    call_slot(m, 0x06000310, 0x3333, 0x4444);
+
+    CHECK(m.master().state().pc == 0x06003000u);
+    REQUIRE(m.bios_calls().size() == 2);
+    CHECK(m.bios_calls()[0].slot == 0x5E8u);
+    CHECK(m.bios_calls()[0].args[0] == 0x1111u);
+    CHECK(m.bios_calls()[0].args[1] == 0x2222u);
+    CHECK(m.bios_calls()[1].slot == 0x06000310u);
+    CHECK(m.bios_calls()[1].return_address == 0x06003000u);
+}
