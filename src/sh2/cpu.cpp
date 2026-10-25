@@ -62,13 +62,27 @@ void Cpu::reset(uint32_t pc, uint32_t sp) {
     s_.sr = kSrIMask;  // interrupções mascaradas (I = 15) após o reset
 }
 
-// Os registradores internos (0xFFFFFE00+) ficam dentro da CPU; o resto vai ao barramento do sistema.
+// Mapa de áreas do SH-2 pelos 3 bits altos: 000/001 = memória (cache/sem cache), 010 = purga do cache, 011 = array de endereços do
+// cache, 110 = array de dados do cache (RAM de 4 KiB), 111 = E/S interna (0xFFFFFE00+). Purga e array de endereços são ignorados.
 uint32_t Cpu::read(uint32_t a, int bytes) {
     if (a >= OnChip::kBase) return onchip_.read(a - OnChip::kBase, bytes);
+    const uint32_t area = a >> 29;
+    if (area == 2 || area == 3) return 0;
+    if (area == 6) {
+        uint32_t value = 0;
+        for (int i = 0; i < bytes; ++i) value = (value << 8) | cache_data_[(a + i) & 0xFFF];
+        return value;
+    }
     return bytes == 1 ? bus_.read8(a) : bytes == 2 ? bus_.read16(a) : bus_.read32(a);
 }
 void Cpu::write(uint32_t a, int bytes, uint32_t v) {
     if (a >= OnChip::kBase) { onchip_.write(a - OnChip::kBase, bytes, v); return; }
+    const uint32_t area = a >> 29;
+    if (area == 2 || area == 3) return;
+    if (area == 6) {
+        for (int i = 0; i < bytes; ++i) cache_data_[(a + i) & 0xFFF] = (v >> (8 * (bytes - 1 - i))) & 0xFF;
+        return;
+    }
     if (bytes == 1) bus_.write8(a, static_cast<uint8_t>(v));
     else if (bytes == 2) bus_.write16(a, static_cast<uint16_t>(v));
     else bus_.write32(a, v);

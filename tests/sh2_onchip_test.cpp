@@ -86,3 +86,28 @@ TEST_CASE("FRT: FRC conta ciclos/8 (CKS=0), marca OVF no estouro e OCFA na compa
     rig.cpu.onchip().write(kFtcsr, 1, 0x00);                 // escrever 0 limpa os flags
     CHECK(rig.cpu.onchip().read(kFtcsr, 1) == 0u);
 }
+
+TEST_CASE("áreas de cache do SH-2: purga (0x4...) e array de endereços (0x6...) são ignoradas sem contar como não mapeadas") {
+    Sh2Rig rig;
+    rig.r(1) = 0x40000010; rig.r(2) = 0x60000020; rig.r(3) = 0x1234;
+    rig.load({0x2132, 0x2232, 0x6422});   // mov.l r3,@r1 ; mov.l r3,@r2 ; mov.l @r2,r4
+    rig.r(4) = 0xFFFF;
+    rig.run(3);
+    CHECK(rig.bus.unmapped_count() == 0u);
+    CHECK(rig.r(4) == 0u);
+}
+
+TEST_CASE("array de dados do cache (0xC0000000, 4 KiB) funciona como RAM rápida") {
+    Sh2Rig rig;
+    rig.r(1) = 0xC0000100; rig.r(2) = 0xCAFEBABE;
+    rig.load({0x2122, 0x6312});   // mov.l r2,@r1 ; mov.l @r1,r3
+    rig.run(2);
+    CHECK(rig.r(3) == 0xCAFEBABEu);
+    CHECK(rig.bus.unmapped_count() == 0u);
+
+    Sh2Rig b;                      // espelhado a cada 4 KiB
+    b.r(1) = 0xC0000100; b.r(2) = 0x11223344; b.r(4) = 0xC0001100;
+    b.load({0x2122, 0x6342});     // mov.l r2,@r1 ; mov.l @r4,r3
+    b.run(2);
+    CHECK(b.r(3) == 0x11223344u);
+}

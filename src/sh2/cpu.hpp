@@ -90,6 +90,7 @@ private:
     Sh2State s_;
     OnChip onchip_;
     ExecutionRecorder* recorder_ = nullptr;
+    std::array<uint8_t, 4096> cache_data_{};   // array de dados do cache (0xC0000000), usado como RAM rápida
     uint32_t op_address_ = 0;  // endereço da instrução em execução
 
     static const OpcodeTable& table();
