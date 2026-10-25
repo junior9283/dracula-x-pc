@@ -9,10 +9,10 @@ Pré-requisitos: Ghidra 12.2 em `~/opt/ghidra_12.2_PUBLIC` (Java 21+) e o disco 
       -processor "SuperH:BE:32:SH-2" -cspec default \
       -loader BinaryLoader -loader-baseAddr 0x06004080 -overwrite
    ```
-   Resultado esperado: "Analysis succeeded"; ~713 funções.
+   Resultado esperado: "Analysis succeeded"; 713 funções após a análise (714 com a entrada criada pelo script, que não é salva com `-readOnly`).
 2. Resumo e desassembly da entrada (ver `EntrySummary.java`):
    ```
-   $G "$PWD/data-local/ghidra" dxpc -process 0.BIN -noanalysis \
+   $G "$PWD/data-local/ghidra" dxpc -process 0.BIN -noanalysis -readOnly \
       -scriptPath "$PWD/tools/ghidra" -postScript EntrySummary.java 0x06004080
    ```
    Esperado: bloco `ram 06004080-060505df` e, na entrada, `mov.l r8,@-r15 / mov.l r14,@-r15 / sts.l pr,@-r15 …`.

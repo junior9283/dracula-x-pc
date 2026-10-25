@@ -15,4 +15,10 @@ SaturnHeader read_header(const DiscImage& disc);
 // Aceita apenas T-9527G V1.400; a mensagem de erro cita o ID encontrado.
 void require_supported_disc(const SaturnHeader& header);
 
+// Tamanho da faixa de dados (em setores) do T-9527G V1.400 original.
+constexpr uint32_t kSupportedDataSectors = 204813;
+
+// Recusa imagem cuja faixa de dados não tem `expected_sectors` setores (download/dump incompleto).
+void require_complete_image(const DiscImage& disc, uint32_t expected_sectors = kSupportedDataSectors);
+
 }  // namespace saturnfs

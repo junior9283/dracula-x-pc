@@ -14,6 +14,7 @@ int main(int argc, char** argv) {
         auto disc = saturnfs::DiscImage::open(argv[1]);
         auto header = saturnfs::read_header(disc);
         saturnfs::require_supported_disc(header);
+        saturnfs::require_complete_image(disc);
         std::cout << "Disco: " << header.product_id << ' ' << header.version << " (" << header.release_date << ")\n";
         auto count = saturnfs::extract_all(disc, argv[2], force);
         std::cout << count << " arquivos extraídos para " << argv[2] << '\n';

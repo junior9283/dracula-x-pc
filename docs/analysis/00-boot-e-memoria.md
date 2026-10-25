@@ -9,14 +9,14 @@ Legenda: **[obs]** observado nos dados · **[inf]** inferido · **[pad]** conven
 | IP size (0xE0) | `0x1800` | [obs] 3 setores de código inicial |
 | Stack-M / Stack-S (0xE8/0xEC) | `0` | [obs] pilhas não definidas no cabeçalho |
 | 1st read address (0xF0) | `0x06004080` | [obs] |
-| 1st read size (0xF4) | `0` | [obs] (usa o tamanho do arquivo) |
+| 1st read size (0xF4) | `0` | [obs] (interpretação: usa o tamanho do arquivo — [pad]) |
 | Código do IP (0x100…) | SH-2 (`4f22` = `sts.l pr,@-r15`) | [obs] |
 | IP carregado em | `0x06002000` | [pad] referências internas `0x0600xxxx` são coerentes |
 
 ## 2. Executável principal: `0.BIN`
 - 312 672 bytes, carregado em **`0x06004080`** (= 1st read address) → ocupa `0x06004080–0x060505DF` na Work RAM-H.
 - **Prova do endereço-base** [obs]: dos ponteiros internos do arquivo, 618 alvos distintos caem em prólogos de função SH-2 com base `0x06004080`, contra 53 com `0x06004000` (e 68/60/40 com 0x4100/0x3F80/0x4040). Com base errada o Ghidra achou 363 funções; com a certa, 713.
-- Entrada (`0x06004080`): `main`. Salva r8/r14/PR, chama inicialização, ajusta registradores de hardware e entra em laço infinito `jsr @r8 / bra` (rotina principal por quadro) [obs].
+- Entrada (`0x06004080`): salva r8/r14/PR, chama uma rotina, altera registradores por `mov.w` e entra em laço infinito `jsr @r8 / bra` [obs]. Que isso seja o `main` e a rotina do laço seja a de quadro é [inf].
 
 ## 3. Arquivos do disco (436 extraídos; 1 ignorado)
 | Padrão | Qtde aprox. | Papel [inf] |
@@ -31,7 +31,7 @@ Legenda: **[obs]** observado nos dados · **[inf]** inferido · **[pad]** conven
 | `EVENT*.00x`, `OMAKE/`, `*.TXT` | poucos | eventos e textos |
 | `CD3;1` | 1 (2 191 360 B, LBA 204 963) | **ignorado**: arquivo fantasma sobre a faixa de áudio (fora da faixa de dados) |
 
-Consequências para o design: a música não está em áudio de CD (a faixa 2 tem ~16 s); o som vem de `SD/*.PCM` + dados de sequência (a localizar na etapa 1). O código é carregado por **overlays** `.PRG` — a recompilação precisa traduzir cada `.PRG`.
+Consequências para o design [inf, a confirmar na etapa 1]: a faixa 2 tem só 1220 setores (~16 s) [obs], logo a música não está em áudio de CD; o som viria de `SD/*.PCM` + dados de sequência (a localizar). O código parece carregado por **overlays** `.PRG`; a recompilação precisaria traduzir cada um.
 
 ## 4. Mapa de memória do Saturn usado [pad]
 | Região | Endereço |
@@ -49,6 +49,7 @@ Consequências para o design: a música não está em áudio de CD (a faixa 2 te
 
 ## 5. Ferramentas e decisões
 - **REA não abre binário SH-2 cru** (`unsupported binary format`): a análise do código usa o Ghidra headless direto (`SuperH:BE:32:SH-2`, `BinaryLoader`, base informada). Procedimento em `tools/ghidra/README.md`.
+- Os números 618×53 (ponteiros em prólogos) vêm de um script Python descartável; a evidência reproduzível é a contagem de funções do Ghidra com cada base (363 com `0x06004000`, 713 com `0x06004080`). `data-local/ip.bin` = setores 0–15 do `Track 1` (2048 B de usuário cada).
 - Ghidra 12.2 em `~/opt/ghidra_12.2_PUBLIC`; projeto em `data-local/ghidra/` (ignorado pelo git).
 
 ## 6. Pendências para a etapa 1

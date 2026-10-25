@@ -1,5 +1,5 @@
 // Resumo do programa aberto: nº de funções, blocos de memória e desassembly a partir do ponto de entrada.
-// Uso: analyzeHeadless <projeto> dxpc -process <arquivo> -noanalysis -scriptPath tools/ghidra -postScript EntrySummary.java 0x06004080
+// Uso: analyzeHeadless <projeto> dxpc -process <arquivo> -noanalysis -readOnly -scriptPath tools/ghidra -postScript EntrySummary.java 0x06004080
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.Instruction;
@@ -9,7 +9,7 @@ public class EntrySummary extends GhidraScript {
     @Override
     protected void run() throws Exception {
         String[] args = getScriptArgs();
-        Address entry = toAddr(args.length > 0 ? args[0] : "0x06004000");
+        Address entry = toAddr(args.length > 0 ? args[0] : "0x06004080");
 
         println("funções: " + currentProgram.getFunctionManager().getFunctionCount());
         for (MemoryBlock block : currentProgram.getMemory().getBlocks())

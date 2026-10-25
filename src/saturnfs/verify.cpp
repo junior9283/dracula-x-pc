@@ -32,4 +32,10 @@ void require_supported_disc(const SaturnHeader& header) {
                                  " (esperado " + std::string(kSupportedProduct) + " " + std::string(kSupportedVersion) + ")");
 }
 
+void require_complete_image(const DiscImage& disc, uint32_t expected_sectors) {
+    if (disc.data_sector_count() != expected_sectors)
+        throw std::runtime_error("imagem incompleta: a faixa de dados tem " + std::to_string(disc.data_sector_count()) +
+                                 " setores, esperado " + std::to_string(expected_sectors));
+}
+
 }  // namespace saturnfs

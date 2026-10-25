@@ -38,6 +38,7 @@ size_t extract_all(const DiscImage& disc, const fs::path& out, bool force) {
         fs::create_directories(target.parent_path());
         std::ofstream file(target, std::ios::binary);
         file.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        file.close();
         if (!file) throw std::runtime_error("falha ao gravar " + target.string());
         manifest << entry.path << ' ' << entry.lba << ' ' << entry.size << ' ' << sha256_hex(bytes) << '\n';
         ++extracted;

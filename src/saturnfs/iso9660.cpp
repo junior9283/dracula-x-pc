@@ -40,7 +40,8 @@ void walk(const DiscImage& disc, uint32_t lba, uint32_t size, const std::string&
             pos = (pos / kUserSectorSize + 1) * kUserSectorSize;
             continue;
         }
-        if (pos + len > dir.size() || len < 34) throw std::runtime_error("registro de diretório inválido");
+        if (pos + len > dir.size() || len < 34 || 33 + size_t(dir[pos + 32]) > len)
+            throw std::runtime_error("registro de diretório inválido");
 
         const uint8_t* rec = dir.data() + pos;
         std::string name(reinterpret_cast<const char*>(rec + 33), rec[32]);

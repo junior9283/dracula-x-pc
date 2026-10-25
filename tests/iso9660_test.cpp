@@ -72,3 +72,22 @@ TEST_CASE("sha256_hex de 'abc' é o vetor conhecido") {
     std::vector<uint8_t> bytes(abc.begin(), abc.end());
     CHECK(saturnfs::sha256_hex(bytes) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
 }
+
+TEST_CASE("list_files rejeita registro cujo tamanho de nome ultrapassa o tamanho do registro") {
+    SyntheticIso iso("T-9527G", "V1.400");
+    iso.add("A.TXT", "a");
+    auto sectors = iso.sectors();
+    sectors[17][32] = 255;  // nome do registro '.' (len 34) declara 255 bytes
+    auto disc = saturnfs::DiscImage::open(write_single_track_disc(make_temp_dir("iso-badname"), sectors));
+
+    REQUIRE_THROWS_WITH(saturnfs::list_files(disc), Catch::Matchers::ContainsSubstring("registro de diretório inválido"));
+}
+
+TEST_CASE("require_complete_image recusa imagem com menos setores de dados que o esperado") {
+    SyntheticIso iso("T-9527G", "V1.400");
+    auto disc = open_disc(iso, "complete1");
+    auto sectors = disc.data_sector_count();
+
+    REQUIRE_NOTHROW(saturnfs::require_complete_image(disc, sectors));
+    REQUIRE_THROWS_WITH(saturnfs::require_complete_image(disc, sectors + 1), Catch::Matchers::ContainsSubstring("incompleta"));
+}
