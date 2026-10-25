@@ -45,12 +45,15 @@ const OpcodeTable& Cpu::table() {
         OpRegistrar::data(t);
         OpRegistrar::alu(t);
         OpRegistrar::branch(t);
+        OpRegistrar::mul(t);
         return t;
     }();
     return instance;
 }
 
-Cpu::Cpu(saturn::Bus& bus, int id) : bus_(bus), id_(id) {}
+Cpu::Cpu(saturn::Bus& bus, int id) : bus_(bus), id_(id) {
+    onchip_.irq = [this](int level, int vector) { raise_interrupt(level, vector); };
+}
 
 void Cpu::reset(uint32_t pc, uint32_t sp) {
     s_ = {};
@@ -59,23 +62,36 @@ void Cpu::reset(uint32_t pc, uint32_t sp) {
     s_.sr = kSrIMask;  // interrupções mascaradas (I = 15) após o reset
 }
 
-uint32_t Cpu::load8s(uint32_t a) { return static_cast<uint32_t>(static_cast<int32_t>(static_cast<int8_t>(bus_.read8(a)))); }
+// Os registradores internos (0xFFFFFE00+) ficam dentro da CPU; o resto vai ao barramento do sistema.
+uint32_t Cpu::read(uint32_t a, int bytes) {
+    if (a >= OnChip::kBase) return onchip_.read(a - OnChip::kBase, bytes);
+    return bytes == 1 ? bus_.read8(a) : bytes == 2 ? bus_.read16(a) : bus_.read32(a);
+}
+void Cpu::write(uint32_t a, int bytes, uint32_t v) {
+    if (a >= OnChip::kBase) { onchip_.write(a - OnChip::kBase, bytes, v); return; }
+    if (bytes == 1) bus_.write8(a, static_cast<uint8_t>(v));
+    else if (bytes == 2) bus_.write16(a, static_cast<uint16_t>(v));
+    else bus_.write32(a, v);
+}
+
+uint32_t Cpu::load8u(uint32_t a) { return read(a, 1); }
+uint32_t Cpu::load8s(uint32_t a) { return static_cast<uint32_t>(static_cast<int32_t>(static_cast<int8_t>(read(a, 1)))); }
 uint32_t Cpu::load16s(uint32_t a) {
     if (a & 1) throw Exception{kVectorAddressError, op_address_};
-    return static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(bus_.read16(a))));
+    return static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(read(a, 2))));
 }
 uint32_t Cpu::load32(uint32_t a) {
     if (a & 3) throw Exception{kVectorAddressError, op_address_};
-    return bus_.read32(a);
+    return read(a, 4);
 }
-void Cpu::store8(uint32_t a, uint32_t v) { bus_.write8(a, static_cast<uint8_t>(v)); }
+void Cpu::store8(uint32_t a, uint32_t v) { write(a, 1, v); }
 void Cpu::store16(uint32_t a, uint32_t v) {
     if (a & 1) throw Exception{kVectorAddressError, op_address_};
-    bus_.write16(a, static_cast<uint16_t>(v));
+    write(a, 2, v);
 }
 void Cpu::store32(uint32_t a, uint32_t v) {
     if (a & 3) throw Exception{kVectorAddressError, op_address_};
-    bus_.write32(a, v);
+    write(a, 4, v);
 }
 
 void Cpu::enter_exception(int vector, uint32_t saved_pc) {

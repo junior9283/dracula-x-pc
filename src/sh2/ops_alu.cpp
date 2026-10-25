@@ -94,20 +94,20 @@ void OpRegistrar::alu(OpcodeTable& t) {
     t.add("11001010iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[0] ^= imm8(op); return 1; });
     t.add("11001000iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t { set_t(c.s_, (c.s_.r[0] & imm8(op)) == 0); return 1; });
     t.add("11001101iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t {
-        const uint32_t a = c.s_.gbr + c.s_.r[0]; c.store8(a, c.bus_.read8(a) & imm8(op)); return 3;
+        const uint32_t a = c.s_.gbr + c.s_.r[0]; c.store8(a, c.load8u(a) & imm8(op)); return 3;
     });
     t.add("11001111iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t {
-        const uint32_t a = c.s_.gbr + c.s_.r[0]; c.store8(a, c.bus_.read8(a) | imm8(op)); return 3;
+        const uint32_t a = c.s_.gbr + c.s_.r[0]; c.store8(a, c.load8u(a) | imm8(op)); return 3;
     });
     t.add("11001110iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t {
-        const uint32_t a = c.s_.gbr + c.s_.r[0]; c.store8(a, c.bus_.read8(a) ^ imm8(op)); return 3;
+        const uint32_t a = c.s_.gbr + c.s_.r[0]; c.store8(a, c.load8u(a) ^ imm8(op)); return 3;
     });
     t.add("11001100iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t {
-        set_t(c.s_, (c.bus_.read8(c.s_.gbr + c.s_.r[0]) & imm8(op)) == 0); return 3;
+        set_t(c.s_, (c.load8u(c.s_.gbr + c.s_.r[0]) & imm8(op)) == 0); return 3;
     });
     t.add("0100nnnn00011011", [](Cpu& c, uint16_t op) -> uint32_t {  // tas.b @Rn
         const uint32_t a = c.s_.r[n_of(op)];
-        const uint8_t value = c.bus_.read8(a);
+        const uint8_t value = c.load8u(a);
         set_t(c.s_, value == 0);
         c.store8(a, value | 0x80);
         return 4;

@@ -4,6 +4,7 @@
 #include <functional>
 
 #include "saturn/bus.hpp"
+#include "sh2/onchip.hpp"
 
 namespace sh2 {
 
@@ -45,6 +46,7 @@ struct OpRegistrar {
     static void data(OpcodeTable& table);    // ops_data.cpp
     static void alu(OpcodeTable& table);     // ops_alu.cpp
     static void branch(OpcodeTable& table);  // ops_branch.cpp
+    static void mul(OpcodeTable& table);     // ops_mul.cpp
 };
 
 class Cpu {
@@ -55,6 +57,7 @@ public:
     uint32_t step();  // executa uma instrução (ou entra numa exceção) e devolve os ciclos
     Sh2State& state() { return s_; }
     int id() const { return id_; }
+    OnChip& onchip() { return onchip_; }
 
     // Pede uma interrupção (nível 1–15; 16 = NMI, que ignora SR.I). Fica pendente até ser atendida entre duas instruções.
     void raise_interrupt(int level, int vector);
@@ -67,6 +70,9 @@ private:
     // Exceção de CPU lançada por acessos/instruções inválidos e tratada em step(): vetor e PC a empilhar.
     struct Exception { int vector; uint32_t saved_pc; };
     // Acessos à memória pelo barramento; endereço desalinhado → Exception{9} (erro de endereço).
+    uint32_t read(uint32_t a, int bytes);
+    void write(uint32_t a, int bytes, uint32_t v);
+    uint32_t load8u(uint32_t a);
     uint32_t load8s(uint32_t a);
     uint32_t load16s(uint32_t a);
     uint32_t load32(uint32_t a);
@@ -82,6 +88,7 @@ private:
     saturn::Bus& bus_;
     int id_;
     Sh2State s_;
+    OnChip onchip_;
     uint32_t op_address_ = 0;  // endereço da instrução em execução
 
     static const OpcodeTable& table();
