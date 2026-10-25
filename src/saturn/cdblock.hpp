@@ -26,11 +26,18 @@ public:
     void write(uint32_t offset, int bytes, uint32_t value) override;
     IoDevice& data_port();
 
+    // Observador de depuração: comando recebido (CR1–CR4) e a resposta devolvida.
+    std::function<void(const std::array<uint16_t, 4>& command, const std::array<uint16_t, 4>& reply)> on_command;
+
+    // Tempo do drive: a cada 1/75 s (um quadro de subcódigo) liga HIRQ.SCDQ.
+    static constexpr uint32_t kCyclesPerSubcodeFrame = 381818;   // 28,636 MHz / 75
+    void advance(uint64_t cycles);
+
     bool irq_pending() const { return (hirq_ & hirq_mask_) != 0; }
     const std::vector<uint8_t>& unknown_commands() const { return unknown_commands_; }
 
     // Bits de HIRQ.
-    static constexpr uint16_t kCmok = 0x0001, kDrdy = 0x0002, kCsct = 0x0004, kBful = 0x0008, kPend = 0x0010, kEhst = 0x0080, kEfls = 0x0200;
+    static constexpr uint16_t kCmok = 0x0001, kDrdy = 0x0002, kCsct = 0x0004, kBful = 0x0008, kPend = 0x0010, kEhst = 0x0080, kEfls = 0x0200, kScdq = 0x0400;
 
 private:
     struct Port;
@@ -51,11 +58,12 @@ private:
 
     const saturnfs::SectorReader& disc_;
     std::unique_ptr<Port> port_;
-    uint16_t hirq_ = 0, hirq_mask_ = 0;
+    uint16_t hirq_ = 0x0BE1, hirq_mask_ = 0xFFFF;   // estado após o reset do drive (CMOK, DCHG, ESEL, EHST, ECPY, EFLS, MPCM) [inf]
     uint16_t cr_[4] = {};
     uint8_t status_ = 0x01;   // PAUSE
     uint32_t fad_ = 150;
     uint32_t actual_words_ = 0;
+    uint64_t subcode_cycles_ = 0;
     int cd_connection_ = 0xFF;
     std::array<Filter, 24> filters_;
     std::vector<BufferedSector> buffer_;

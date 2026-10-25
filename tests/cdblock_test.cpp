@@ -80,12 +80,12 @@ TEST_CASE("GetHardwareInfo devolve as constantes de versão") {
 
 TEST_CASE("ChangeDirectory na raiz + GetFileSystemScope: número de entradas; GetFileInfo por id") {
     CdRig rig("cd4");
-    rig.cmd(0x6000, 0, 0x00FF, 0xFFFF);                 // ChangeDirectory: raiz (id 0xFFFFFF)
+    rig.cmd(0x7000, 0, 0x00FF, 0xFFFF);                 // ChangeDirectory (0x70): raiz (id 0xFFFFFF)
     CHECK((rig.hirq() & 0x200) != 0);                   // EFLS
-    auto scope = rig.cmd(0x6200);
+    auto scope = rig.cmd(0x7200);
     CHECK(scope[1] == 4u);                              // ".", "..", "DIR", "A.TXT"
 
-    rig.cmd(0x6300, 0, 0x0000, 3);                      // GetFileInfo id 3 (A.TXT)
+    rig.cmd(0x7300, 0, 0x0000, 3);                      // GetFileInfo id 3 (A.TXT)
     CHECK((rig.hirq() & 0x02) != 0);                    // DRDY
     auto info = rig.read_port(12);
     const uint32_t fad = (uint8_t(info[0]) << 24) | (uint8_t(info[1]) << 16) | (uint8_t(info[2]) << 8) | uint8_t(info[3]);
@@ -99,20 +99,20 @@ TEST_CASE("ChangeDirectory na raiz + GetFileSystemScope: número de entradas; Ge
 
 TEST_CASE("ReadFile de DIR/B.BIN: sai pelo conector do filtro, 2 setores no buffer, bytes iguais ao arquivo") {
     CdRig rig("cd5");
-    rig.cmd(0x6000, 0, 0x0000, 2);                      // entra em DIR (id 2 na raiz)
+    rig.cmd(0x7000, 0, 0x0000, 2);                      // entra em DIR (id 2 na raiz)
     rig.cmd(0x3000, 0, 0x0000, 0);                      // SetCDDeviceConnection: filtro 0
     rig.cmd(0x4601, 0x0000, 0x0000, 0);                 // SetFilterConnection: filtro 0, saída verdadeira = partição 0
-    rig.cmd(0x6400, 0, 0x0000, 2);                      // ReadFile: filtro 0, id 2 (B.BIN), deslocamento 0
+    rig.cmd(0x7400, 0, 0x0000, 2);                      // ReadFile: filtro 0, id 2 (B.BIN), deslocamento 0
     CHECK((rig.hirq() & 0x10) != 0);                    // PEND: fim da leitura
 
     auto count = rig.cmd(0x5100, 0, 0x0000, 0);         // GetSectorNumber da partição 0
     CHECK(count[3] == 2u);
 
-    rig.cmd(0x5600, 0, 0x0000, 2);                      // GetSectorData: partição 0, 2 setores
+    rig.cmd(0x6100, 0, 0x0000, 2);                      // GetSectorData: partição 0, 2 setores
     CHECK(rig.read_port(3000) == rig.big);
     rig.cmd(0x0600);                                    // EndDataTransfer
 
-    rig.cmd(0x5700, 0, 0x0000, 0xFFFF);                 // DeleteSectorData: tudo
+    rig.cmd(0x6200, 0, 0x0000, 0xFFFF);                 // DeleteSectorData: tudo
     CHECK(rig.cmd(0x5100, 0, 0x0000, 0)[3] == 0u);
 }
 
@@ -142,10 +142,67 @@ TEST_CASE("comando desconhecido: resposta 0xFF00 (rejeitado), registrado, e CMOK
 
 TEST_CASE("porta de dados: acessos de 16 bits e leitura além do fim devolvem 0") {
     CdRig rig("cd8");
-    rig.cmd(0x6000, 0, 0x00FF, 0xFFFF);
-    rig.cmd(0x6300, 0, 0x0000, 3);                      // 12 bytes de informação
+    rig.cmd(0x7000, 0, 0x00FF, 0xFFFF);
+    rig.cmd(0x7300, 0, 0x0000, 3);                      // 12 bytes de informação
     const uint32_t first = rig.cd.data_port().read(0, 2);
     CHECK(first == ((rig.lba_of("A.TXT") + kFadOffset) >> 16));   // palavra alta do FAD
     for (int i = 0; i < 10; ++i) rig.cd.data_port().read(0, 4);   // esgota
     CHECK(rig.cd.data_port().read(0, 4) == 0u);
+}
+
+TEST_CASE("GetTOC (0x02): 102 entradas de 4 bytes pela porta de dados; faixa 1 de dados em FAD 150 e lead-out depois do último setor") {
+    CdRig rig("cd9");
+    auto r = rig.cmd(0x0200);
+    CHECK(r[1] == 204u);                                // 408 bytes = 204 palavras
+    CHECK((rig.hirq() & 0x02) != 0);                    // DRDY
+    auto toc = rig.read_port(408);
+    auto entry = [&](int i) { return (uint32_t(uint8_t(toc[4*i])) << 24) | (uint8_t(toc[4*i+1]) << 16) | (uint8_t(toc[4*i+2]) << 8) | uint8_t(toc[4*i+3]); };
+    CHECK(entry(0) == (0x41000000u | kFadOffset));      // faixa 1: controle/endereço 0x41, FAD 150
+    CHECK(entry(1) == 0xFFFFFFFFu);                      // faixa 2 inexistente
+    CHECK(entry(99) == 0x41010000u);                     // A0: primeira faixa = 1
+    CHECK(entry(100) == 0x41010000u);                    // A1: última faixa = 1
+    CHECK((entry(101) & 0xFFFFFF) == rig.disc.sector_count() + kFadOffset);   // A2: lead-out
+}
+
+TEST_CASE("GetSessionInfo (0x03): sessão 0 = número de sessões e lead-out; sessão 1 = primeira faixa e FAD inicial") {
+    CdRig rig("cd10");
+    auto all = rig.cmd(0x0300);
+    const uint32_t leadout = rig.disc.sector_count() + kFadOffset;
+    CHECK((all[2] >> 8) == 1u);
+    CHECK(all[2] == uint16_t((1u << 8) | ((leadout >> 16) & 0xFF)));
+    CHECK(all[3] == uint16_t(leadout & 0xFFFF));
+
+    auto first = rig.cmd(0x0301);
+    CHECK((first[2] >> 8) == 1u);                       // primeira faixa
+    CHECK(first[3] == kFadOffset);
+}
+
+TEST_CASE("on_command recebe o comando e a resposta de cada execução") {
+    CdRig rig("cd11");
+    std::vector<std::array<uint16_t, 4>> commands, replies;
+    rig.cd.on_command = [&](const std::array<uint16_t, 4>& c, const std::array<uint16_t, 4>& r) { commands.push_back(c); replies.push_back(r); };
+
+    rig.cmd(0x0100);
+    rig.cmd(0x9900, 1, 2, 3);
+
+    REQUIRE(commands.size() == 2);
+    CHECK(commands[0][0] == 0x0100u);
+    CHECK(replies[0][1] == 0x0201u);
+    CHECK(commands[1] == std::array<uint16_t, 4>{0x9900, 1, 2, 3});
+    CHECK(replies[1][0] == 0xFF00u);
+}
+
+TEST_CASE("o drive atualiza o subcódigo Q periodicamente: advance() liga HIRQ.SCDQ a cada 1/75 s") {
+    CdRig rig("cd12");
+    CHECK((rig.hirq() & 0x0400) == 0u);
+
+    rig.cd.advance(CdBlock::kCyclesPerSubcodeFrame - 1);
+    CHECK((rig.hirq() & 0x0400) == 0u);
+    rig.cd.advance(1);
+    CHECK((rig.hirq() & 0x0400) != 0u);
+
+    rig.cd.write(kHirq, 2, ~0x0400u & 0xFFFF);    // o software reconhece
+    CHECK((rig.hirq() & 0x0400) == 0u);
+    rig.cd.advance(CdBlock::kCyclesPerSubcodeFrame * 3);
+    CHECK((rig.hirq() & 0x0400) != 0u);            // e ele volta
 }

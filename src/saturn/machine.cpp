@@ -35,6 +35,7 @@ Machine::Machine(std::unique_ptr<saturnfs::SectorReader> disc) : disc_(std::move
     bus_.map_io(kScuBase, kRegionSize, scu_);
     bus_.map_io(kVdp2RegistersBase, kRegionSize, timing_);
     bus_.map_io(CdBlock::kRegisterBase, kRegionSize, *cd_);
+    bus_.map_io(CdBlock::kRegisterBase + 0x8000, kRegionSize, *cd_);   // espelho dos registradores (o bit A15 não é decodificado)
     bus_.map_io(CdBlock::kDataPortBase, kRegionSize, cd_->data_port());
     // Memórias e registradores dos chips de vídeo/som: armazenamento simples até as etapas 3 e 4.
     bus_.map_ram(kBackupRamBase, 64 * kKilobyte, 0x80000);
@@ -115,6 +116,7 @@ void Machine::load_first_read_file(sh2::Cpu& cpu) {
 
 void Machine::advance_hardware(uint32_t cycles) {
     timing_.advance(cycles);
+    cd_->advance(cycles);
     master_->onchip().advance(cycles);
     if (slave_running_) slave_->onchip().advance(cycles);
 }

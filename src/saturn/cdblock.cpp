@@ -17,13 +17,15 @@ constexpr uint8_t kFilterRangeMode = 0x40;
 constexpr uint16_t kRejected = 0xFF00;
 constexpr uint8_t kStatusPause = 0x01, kStatusPlay = 0x03;
 constexpr size_t kInfoBytes = 12;                  // bytes por arquivo no GetFileInfo
+constexpr int kTocEntries = 102;                   // 99 faixas + A0 (primeira) + A1 (última) + A2 (lead-out)
+constexpr uint32_t kTocDataControl = 0x41000000, kTocAudioPointer = 0x01000000;
 
 enum Command : uint8_t {
-    kGetStatus = 0x00, kGetHwInfo = 0x01, kInit = 0x04, kEndDataTransfer = 0x06, kPlay = 0x10, kSeek = 0x11,
+    kGetStatus = 0x00, kGetHwInfo = 0x01, kGetToc = 0x02, kGetSessionInfo = 0x03, kInit = 0x04, kEndDataTransfer = 0x06, kPlay = 0x10, kSeek = 0x11,
     kSetConnection = 0x30, kGetConnection = 0x31, kSetFilterRange = 0x40, kSetFilterMode = 0x44, kSetFilterConnection = 0x46,
     kResetSelector = 0x48, kGetBufferSize = 0x50, kGetSectorNumber = 0x51, kCalcActualSize = 0x52, kGetActualSize = 0x53,
-    kSetSectorLength = 0x55, kGetSectorData = 0x56, kDeleteSectorData = 0x57, kGetThenDelete = 0x58,
-    kChangeDirectory = 0x60, kReadDirectory = 0x61, kGetFileSystemScope = 0x62, kGetFileInfo = 0x63, kReadFile = 0x64, kAbortFile = 0x65
+    kSetSectorLength = 0x60, kGetSectorData = 0x61, kDeleteSectorData = 0x62, kGetThenDelete = 0x63,
+    kChangeDirectory = 0x70, kReadDirectory = 0x71, kGetFileSystemScope = 0x72, kGetFileInfo = 0x73, kReadFile = 0x74, kAbortFile = 0x75
 };
 
 void put_be32(std::vector<uint8_t>& out, uint32_t v) {
@@ -84,6 +86,13 @@ void CdBlock::write(uint32_t offset, int bytes, uint32_t value) {
         case kCr4Reg: cr_[3] = v; execute(); break;  // CR4 dispara o comando
         default: break;
     }
+}
+
+void CdBlock::advance(uint64_t cycles) {
+    subcode_cycles_ += cycles;
+    if (subcode_cycles_ < kCyclesPerSubcodeFrame) return;
+    subcode_cycles_ %= kCyclesPerSubcodeFrame;
+    hirq_ |= kScdq;
 }
 
 std::array<uint16_t, 4> CdBlock::status_reply() const {
@@ -156,6 +165,7 @@ void CdBlock::load_directory(uint32_t file_id) {
 
 // ---- Comandos
 void CdBlock::execute() {
+    const std::array<uint16_t, 4> request = {cr_[0], cr_[1], cr_[2], cr_[3]};
     const uint16_t c1 = cr_[0], c2 = cr_[1], c3 = cr_[2], c4 = cr_[3];
     const uint8_t command = c1 >> 8;
     const int filter = c3 >> 8;
@@ -170,6 +180,26 @@ void CdBlock::execute() {
         switch (command) {
             case kGetStatus: finish(status()); break;
             case kGetHwInfo: finish({static_cast<uint16_t>(status_ << 8), 0x0201, 0, 0x0400}); break;
+            case kGetToc: {
+                // Disco de uma faixa de dados: faixa 1 em FAD 150, demais vazias, A0/A1 = faixa 1 e A2 = lead-out.
+                std::vector<uint8_t> toc;
+                for (int i = 0; i < kTocEntries; ++i) {
+                    uint32_t entry = 0xFFFFFFFF;
+                    if (i == 0) entry = kTocDataControl | kFadOffset;
+                    else if (i == 99 || i == 100) entry = kTocDataControl | (1u << 16);
+                    else if (i == 101) entry = kTocDataControl | (disc_.sector_count() + kFadOffset);
+                    put_be32(toc, entry);
+                }
+                finish({static_cast<uint16_t>(status_ << 8), static_cast<uint16_t>(toc.size() / 2), 0, 0});
+                begin_transfer(std::move(toc));
+                break;
+            }
+            case kGetSessionInfo: {
+                const uint32_t leadout = disc_.sector_count() + kFadOffset;
+                if ((c1 & 0xFF) == 0) finish({static_cast<uint16_t>(status_ << 8), 0, static_cast<uint16_t>((1u << 8) | ((leadout >> 16) & 0xFF)), static_cast<uint16_t>(leadout & 0xFFFF)});
+                else finish({static_cast<uint16_t>(status_ << 8), 0, static_cast<uint16_t>(1u << 8), static_cast<uint16_t>(kFadOffset)});
+                break;
+            }
             case kInit:
                 if (c1 & 0x01) { buffer_.clear(); filters_ = {}; cd_connection_ = kNoConnection; }
                 fad_ = kFadOffset;
@@ -295,6 +325,7 @@ void CdBlock::execute() {
     } catch (const std::exception&) {
         finish({kRejected, 0, 0, 0});  // parâmetro inválido (id inexistente, disco ilegível): comando rejeitado
     }
+    if (on_command) on_command(request, {cr_[0], cr_[1], cr_[2], cr_[3]});
 }
 
 }  // namespace saturn

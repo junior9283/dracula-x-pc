@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -34,7 +35,7 @@ void print_state(saturn::Machine& m) {
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::cerr << "uso: dxpc-run <arquivo.cue> [--frames N] [--trace arquivo] [--lenient-bios] [--peek endereço]... [--bios arquivo (só desenvolvimento: a BIOS é do próprio usuário)] [--until-pc endereço] [--dump-ram arquivo (1 MB da Work RAM-H, uso local)]\n";
+        std::cerr << "uso: dxpc-run <arquivo.cue> [--frames N] [--trace arquivo] [--lenient-bios] [--peek endereço]... [--bios arquivo (só desenvolvimento: a BIOS é do próprio usuário)] [--until-pc endereço] [--log-cd N] [--dump-ram arquivo (1 MB da Work RAM-H, uso local)]\n";
         return 2;
     }
     int frames = 5;
@@ -43,11 +44,13 @@ int main(int argc, char** argv) {
     std::vector<uint32_t> peeks;
     std::string bios_file, dump_ram_file;
     uint32_t until_pc = 0;
+    int log_cd = 0;
     for (int i = 2; i < argc; ++i) {
         if (!std::strcmp(argv[i], "--frames") && i + 1 < argc) frames = std::atoi(argv[++i]);
         else if (!std::strcmp(argv[i], "--trace") && i + 1 < argc) trace_file = argv[++i];
         else if (!std::strcmp(argv[i], "--lenient-bios")) lenient = true;
         else if (!std::strcmp(argv[i], "--dump-ram") && i + 1 < argc) dump_ram_file = argv[++i];
+        else if (!std::strcmp(argv[i], "--log-cd") && i + 1 < argc) log_cd = std::atoi(argv[++i]);
         else if (!std::strcmp(argv[i], "--bios") && i + 1 < argc) bios_file = argv[++i];
         else if (!std::strcmp(argv[i], "--until-pc") && i + 1 < argc) until_pc = static_cast<uint32_t>(std::strtoul(argv[++i], nullptr, 0));
         else if (!std::strcmp(argv[i], "--peek") && i + 1 < argc) peeks.push_back(static_cast<uint32_t>(std::strtoul(argv[++i], nullptr, 0)));
@@ -61,6 +64,13 @@ int main(int argc, char** argv) {
 
         saturn::Machine machine(std::move(disc));
         machine.set_bios_strict(!lenient);
+        int logged_cd = 0;
+        machine.cd().on_command = [&](const std::array<uint16_t, 4>& c, const std::array<uint16_t, 4>& r) {
+            if (logged_cd++ >= log_cd) return;
+            char line[160];
+            std::snprintf(line, sizeof line, "CD cmd %04X %04X %04X %04X -> %04X %04X %04X %04X (quadro %llu)", c[0], c[1], c[2], c[3], r[0], r[1], r[2], r[3], (unsigned long long)machine.frame());
+            std::cout << line << '\n';
+        };
         std::map<int, uint64_t> interrupts_taken;
         machine.on_interrupt_taken = [&](int, int vector) { ++interrupts_taken[vector]; };
         if (bios_file.empty()) {
