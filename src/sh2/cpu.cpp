@@ -32,6 +32,7 @@ const OpcodeTable& Cpu::table() {
     static const OpcodeTable instance = [] {
         OpcodeTable t;
         OpRegistrar::data(t);
+        OpRegistrar::alu(t);
         return t;
     }();
     return instance;

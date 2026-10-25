@@ -42,6 +42,7 @@ class Cpu;
 // Registro das instruções por grupo (cada grupo vive em seu próprio .cpp e acessa o interior da CPU por amizade).
 struct OpRegistrar {
     static void data(OpcodeTable& table);    // ops_data.cpp
+    static void alu(OpcodeTable& table);     // ops_alu.cpp
 };
 
 class Cpu {
