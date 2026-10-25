@@ -1,15 +1,11 @@
 // Multiplicação (MUL, MULS/MULU, DMULS/DMULU), multiplicação-acumulação (MAC.W/.L) e divisão passo a passo (DIV0S/DIV0U/DIV1).
-#include "sh2/cpu.hpp"
+#include "sh2/op_fields.hpp"
 
 namespace sh2 {
 namespace {
 
-constexpr uint32_t n_of(uint16_t op) { return (op >> 8) & 0xF; }
-constexpr uint32_t m_of(uint16_t op) { return (op >> 4) & 0xF; }
-
 uint64_t mac_value(const Sh2State& s) { return (uint64_t(s.mach) << 32) | s.macl; }
 void set_mac(Sh2State& s, uint64_t value) { s.mach = static_cast<uint32_t>(value >> 32); s.macl = static_cast<uint32_t>(value); }
-void set_flag(Sh2State& s, uint32_t flag, bool on) { s.sr = (s.sr & ~flag) | (on ? flag : 0); }
 
 }  // namespace
 
@@ -66,7 +62,7 @@ void OpRegistrar::mul(OpcodeTable& t) {
     // ---- Divisão passo a passo
     t.add("0010nnnnmmmm0111", [](Cpu& c, uint16_t op) -> uint32_t {  // div0s Rm,Rn
         const bool q = c.s_.r[n_of(op)] >> 31, m = c.s_.r[m_of(op)] >> 31;
-        set_flag(c.s_, kSrQ, q); set_flag(c.s_, kSrM, m); set_flag(c.s_, kSrT, q != m);
+        set_sr_flag(c.s_, kSrQ, q); set_sr_flag(c.s_, kSrM, m); set_sr_flag(c.s_, kSrT, q != m);
         return 1;
     });
     t.add("0000000000011001", [](Cpu& c, uint16_t) -> uint32_t { c.s_.sr &= ~(kSrQ | kSrM | kSrT); return 1; });  // div0u
@@ -82,8 +78,8 @@ void OpRegistrar::mul(OpcodeTable& t) {
         rn = subtract ? rn - rm : rn + rm;
         const bool tmp1 = subtract ? rn > before : rn < before;
         q = tmp1 ^ q ^ m;
-        set_flag(c.s_, kSrQ, q);
-        set_flag(c.s_, kSrT, q == m);
+        set_sr_flag(c.s_, kSrQ, q);
+        set_sr_flag(c.s_, kSrT, q == m);
         return 1;
     });
 }

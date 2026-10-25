@@ -1,22 +1,12 @@
 // Instruções de transferência de dados: MOV (todas as formas), MOVA, MOVT, SWAP, XTRCT, LDC/STC/LDS/STS e NOP.
-#include "sh2/cpu.hpp"
+#include "sh2/op_fields.hpp"
 
 namespace sh2 {
-namespace {
-
-constexpr uint32_t n_of(uint16_t op) { return (op >> 8) & 0xF; }
-constexpr uint32_t m_of(uint16_t op) { return (op >> 4) & 0xF; }
-constexpr uint32_t d4_of(uint16_t op) { return op & 0xF; }
-constexpr uint32_t d8_of(uint16_t op) { return op & 0xFF; }
-constexpr int32_t sext8(uint16_t op) { return static_cast<int8_t>(op & 0xFF); }
-
-}  // namespace
-
 void OpRegistrar::data(OpcodeTable& t) {
     t.add("0000000000001001", [](Cpu&, uint16_t) -> uint32_t { return 1; });  // nop
 
     // ---- Imediato e entre registradores
-    t.add("1110nnnniiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[n_of(op)] = static_cast<uint32_t>(sext8(op)); return 1; });
+    t.add("1110nnnniiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[n_of(op)] = static_cast<uint32_t>(simm8(op)); return 1; });
     t.add("0110nnnnmmmm0011", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[n_of(op)] = c.s_.r[m_of(op)]; return 1; });
 
     // ---- PC-relativo (PC da instrução + 4)
@@ -60,11 +50,11 @@ void OpRegistrar::data(OpcodeTable& t) {
     });
 
     // ---- Com deslocamento
-    t.add("10000000nnnndddd", [](Cpu& c, uint16_t op) -> uint32_t { c.store8(c.s_.r[(op >> 4) & 0xF] + d4_of(op), c.s_.r[0]); return 1; });
-    t.add("10000001nnnndddd", [](Cpu& c, uint16_t op) -> uint32_t { c.store16(c.s_.r[(op >> 4) & 0xF] + d4_of(op) * 2, c.s_.r[0]); return 1; });
+    t.add("10000000nnnndddd", [](Cpu& c, uint16_t op) -> uint32_t { c.store8(c.s_.r[m_of(op)] + d4_of(op), c.s_.r[0]); return 1; });
+    t.add("10000001nnnndddd", [](Cpu& c, uint16_t op) -> uint32_t { c.store16(c.s_.r[m_of(op)] + d4_of(op) * 2, c.s_.r[0]); return 1; });
     t.add("0001nnnnmmmmdddd", [](Cpu& c, uint16_t op) -> uint32_t { c.store32(c.s_.r[n_of(op)] + d4_of(op) * 4, c.s_.r[m_of(op)]); return 1; });
-    t.add("10000100mmmmdddd", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[0] = c.load8s(c.s_.r[(op >> 4) & 0xF] + d4_of(op)); return 1; });
-    t.add("10000101mmmmdddd", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[0] = c.load16s(c.s_.r[(op >> 4) & 0xF] + d4_of(op) * 2); return 1; });
+    t.add("10000100mmmmdddd", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[0] = c.load8s(c.s_.r[m_of(op)] + d4_of(op)); return 1; });
+    t.add("10000101mmmmdddd", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[0] = c.load16s(c.s_.r[m_of(op)] + d4_of(op) * 2); return 1; });
     t.add("0101nnnnmmmmdddd", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[n_of(op)] = c.load32(c.s_.r[m_of(op)] + d4_of(op) * 4); return 1; });
 
     // ---- Indexado por R0
@@ -84,7 +74,7 @@ void OpRegistrar::data(OpcodeTable& t) {
     t.add("11000110dddddddd", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[0] = c.load32(c.s_.gbr + d8_of(op) * 4); return 1; });
 
     // ---- MOVT, SWAP, XTRCT
-    t.add("0000nnnn00101001", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[n_of(op)] = c.s_.sr & kSrT; return 1; });
+    t.add("0000nnnn00101001", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[n_of(op)] = sr_flag(c.s_, kSrT) ? 1 : 0; return 1; });
     t.add("0110nnnnmmmm1000", [](Cpu& c, uint16_t op) -> uint32_t {
         const uint32_t m = c.s_.r[m_of(op)];
         c.s_.r[n_of(op)] = (m & 0xFFFF0000u) | ((m & 0xFF) << 8) | ((m >> 8) & 0xFF);
@@ -102,34 +92,34 @@ void OpRegistrar::data(OpcodeTable& t) {
 
     // ---- Registradores de controle e de sistema: LDC/LDS (de registrador e de @Rm+), STC/STS (para registrador e @-Rn)
     t.add("0100mmmm00001110", [](Cpu& c, uint16_t op) -> uint32_t {
-        c.s_.sr = c.s_.r[(op >> 8) & 0xF] & kSrWritable;
+        c.s_.sr = c.s_.r[n_of(op)] & kSrWritable;
         c.inhibit_irq_ = true;  // nenhuma interrupção entre o LDC SR e a instrução seguinte
         return 1;
     });
-    t.add("0100mmmm00011110", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.gbr = c.s_.r[(op >> 8) & 0xF]; return 1; });
-    t.add("0100mmmm00101110", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.vbr = c.s_.r[(op >> 8) & 0xF]; return 1; });
-    t.add("0100mmmm00001010", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.mach = c.s_.r[(op >> 8) & 0xF]; return 1; });
-    t.add("0100mmmm00011010", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.macl = c.s_.r[(op >> 8) & 0xF]; return 1; });
-    t.add("0100mmmm00101010", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.pr = c.s_.r[(op >> 8) & 0xF]; return 1; });
+    t.add("0100mmmm00011110", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.gbr = c.s_.r[n_of(op)]; return 1; });
+    t.add("0100mmmm00101110", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.vbr = c.s_.r[n_of(op)]; return 1; });
+    t.add("0100mmmm00001010", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.mach = c.s_.r[n_of(op)]; return 1; });
+    t.add("0100mmmm00011010", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.macl = c.s_.r[n_of(op)]; return 1; });
+    t.add("0100mmmm00101010", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.pr = c.s_.r[n_of(op)]; return 1; });
 
     t.add("0100mmmm00000111", [](Cpu& c, uint16_t op) -> uint32_t {
-        const uint32_t m = (op >> 8) & 0xF; const uint32_t v = c.load32(c.s_.r[m]); c.s_.r[m] += 4; c.s_.sr = v & kSrWritable;
+        const uint32_t m = n_of(op); const uint32_t v = c.load32(c.s_.r[m]); c.s_.r[m] += 4; c.s_.sr = v & kSrWritable;
         c.inhibit_irq_ = true; return 3;
     });
     t.add("0100mmmm00010111", [](Cpu& c, uint16_t op) -> uint32_t {
-        const uint32_t m = (op >> 8) & 0xF; const uint32_t v = c.load32(c.s_.r[m]); c.s_.r[m] += 4; c.s_.gbr = v; return 3;
+        const uint32_t m = n_of(op); const uint32_t v = c.load32(c.s_.r[m]); c.s_.r[m] += 4; c.s_.gbr = v; return 3;
     });
     t.add("0100mmmm00100111", [](Cpu& c, uint16_t op) -> uint32_t {
-        const uint32_t m = (op >> 8) & 0xF; const uint32_t v = c.load32(c.s_.r[m]); c.s_.r[m] += 4; c.s_.vbr = v; return 3;
+        const uint32_t m = n_of(op); const uint32_t v = c.load32(c.s_.r[m]); c.s_.r[m] += 4; c.s_.vbr = v; return 3;
     });
     t.add("0100mmmm00000110", [](Cpu& c, uint16_t op) -> uint32_t {
-        const uint32_t m = (op >> 8) & 0xF; const uint32_t v = c.load32(c.s_.r[m]); c.s_.r[m] += 4; c.s_.mach = v; return 1;
+        const uint32_t m = n_of(op); const uint32_t v = c.load32(c.s_.r[m]); c.s_.r[m] += 4; c.s_.mach = v; return 1;
     });
     t.add("0100mmmm00010110", [](Cpu& c, uint16_t op) -> uint32_t {
-        const uint32_t m = (op >> 8) & 0xF; const uint32_t v = c.load32(c.s_.r[m]); c.s_.r[m] += 4; c.s_.macl = v; return 1;
+        const uint32_t m = n_of(op); const uint32_t v = c.load32(c.s_.r[m]); c.s_.r[m] += 4; c.s_.macl = v; return 1;
     });
     t.add("0100mmmm00100110", [](Cpu& c, uint16_t op) -> uint32_t {
-        const uint32_t m = (op >> 8) & 0xF; const uint32_t v = c.load32(c.s_.r[m]); c.s_.r[m] += 4; c.s_.pr = v; return 1;
+        const uint32_t m = n_of(op); const uint32_t v = c.load32(c.s_.r[m]); c.s_.r[m] += 4; c.s_.pr = v; return 1;
     });
 
     t.add("0000nnnn00000010", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[n_of(op)] = c.s_.sr; return 1; });

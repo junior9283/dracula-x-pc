@@ -19,7 +19,6 @@ constexpr uint32_t kSrWritable = kSrT | kSrS | kSrIMask | kSrQ | kSrM;  // 0x3F3
 struct Sh2State {
     uint32_t r[16] = {};
     uint32_t pc = 0, pr = 0, gbr = 0, vbr = 0, mach = 0, macl = 0, sr = 0;
-    bool in_delay_slot = false;
 };
 
 class Cpu;
@@ -38,8 +37,6 @@ public:
 private:
     std::array<OpHandler, 65536> handlers_;
 };
-
-class Cpu;
 
 // Registro das instruções por grupo (cada grupo vive em seu próprio .cpp e acessa o interior da CPU por amizade).
 struct OpRegistrar {

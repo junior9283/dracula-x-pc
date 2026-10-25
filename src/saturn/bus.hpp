@@ -44,6 +44,7 @@ public:
     struct Storage;
 
 private:
+    uint32_t unmapped(uint32_t address);  // contabiliza o acesso e devolve 0
     template <int Bytes> uint32_t read(uint32_t address);
     template <int Bytes> void write(uint32_t address, uint32_t value);
 

@@ -5,10 +5,7 @@
 #include "sh2_harness.hpp"
 
 using testsupport::Sh2Rig;
-
-namespace {
-constexpr uint16_t nm(uint16_t base, int n, int m) { return static_cast<uint16_t>(base | (n << 8) | (m << 4)); }
-}  // namespace
+using testsupport::nm;
 
 TEST_CASE("mul.l, muls.w e mulu.w gravam em MACL") {
     Sh2Rig rig;
@@ -123,8 +120,7 @@ uint32_t divide_32_by_16(uint32_t dividend, uint32_t divisor) {
     for (int i = 0; i < 16; ++i) program.push_back(nm(0x3004, 0, 1));          // div1 r1,r0
     program.push_back(0x4024);                                                  // rotcl r0
     program.push_back(nm(0x600D, 0, 0));                                        // extu.w r0,r0
-    uint32_t address = Sh2Rig::kCode;
-    for (uint16_t w : program) { rig.bus.write16(address, w); address += 2; }
+    rig.load(program);
     rig.r(0) = dividend;
     rig.r(1) = divisor << 16;
     rig.run(static_cast<int>(program.size()));
@@ -141,8 +137,7 @@ uint32_t divide_32_by_32(uint32_t dividend, uint32_t divisor) {
         program.push_back(nm(0x3004, 3, 1));                                    // div1 r1,r3
     }
     program.push_back(0x4024);                                                  // rotcl r0
-    uint32_t address = Sh2Rig::kCode;
-    for (uint16_t w : program) { rig.bus.write16(address, w); address += 2; }
+    rig.load(program);
     rig.r(0) = dividend; rig.r(1) = divisor; rig.r(3) = 0;
     rig.run(static_cast<int>(program.size()));
     return rig.r(0);

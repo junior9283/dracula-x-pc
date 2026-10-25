@@ -1,10 +1,9 @@
 // Desvios (com e sem delay slot), chamadas/retornos, TRAPA, RTE e SLEEP.
-#include "sh2/cpu.hpp"
+#include "sh2/op_fields.hpp"
 
 namespace sh2 {
 namespace {
 
-constexpr uint32_t m_of(uint16_t op) { return (op >> 8) & 0xF; }
 // Deslocamento de 8 e de 12 bits com sinal, em palavras de 16 bits.
 constexpr int32_t disp8(uint16_t op) { return static_cast<int8_t>(op & 0xFF) * 2; }
 constexpr int32_t disp12(uint16_t op) { return (static_cast<int32_t>(op & 0xFFF) << 20 >> 20) * 2; }
@@ -18,15 +17,15 @@ void OpRegistrar::branch(OpcodeTable& t) {
         c.s_.pr = c.op_address_ + 4;
         return 1 + c.delay_slot(c.op_address_ + 4 + disp12(op));
     });
-    t.add("0000mmmm00100011", [](Cpu& c, uint16_t op) -> uint32_t { return 1 + c.delay_slot(c.op_address_ + 4 + c.s_.r[m_of(op)]); });
+    t.add("0000mmmm00100011", [](Cpu& c, uint16_t op) -> uint32_t { return 1 + c.delay_slot(c.op_address_ + 4 + c.s_.r[n_of(op)]); });
     t.add("0000mmmm00000011", [](Cpu& c, uint16_t op) -> uint32_t {
         c.s_.pr = c.op_address_ + 4;
-        return 1 + c.delay_slot(c.op_address_ + 4 + c.s_.r[m_of(op)]);
+        return 1 + c.delay_slot(c.op_address_ + 4 + c.s_.r[n_of(op)]);
     });
-    t.add("0100mmmm00101011", [](Cpu& c, uint16_t op) -> uint32_t { return 1 + c.delay_slot(c.s_.r[m_of(op)]); });
+    t.add("0100mmmm00101011", [](Cpu& c, uint16_t op) -> uint32_t { return 1 + c.delay_slot(c.s_.r[n_of(op)]); });
     t.add("0100mmmm00001011", [](Cpu& c, uint16_t op) -> uint32_t {
         c.s_.pr = c.op_address_ + 4;
-        return 1 + c.delay_slot(c.s_.r[m_of(op)]);
+        return 1 + c.delay_slot(c.s_.r[n_of(op)]);
     });
     t.add("0000000000001011", [](Cpu& c, uint16_t) -> uint32_t { return 1 + c.delay_slot(c.s_.pr); });  // rts
     t.add("0000000000101011", [](Cpu& c, uint16_t) -> uint32_t {                                        // rte

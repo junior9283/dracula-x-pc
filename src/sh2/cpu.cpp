@@ -96,10 +96,10 @@ void Cpu::store32(uint32_t a, uint32_t v) {
 
 void Cpu::enter_exception(int vector, uint32_t saved_pc) {
     s_.r[15] -= 4;
-    bus_.write32(s_.r[15], s_.sr);
+    write(s_.r[15], 4, s_.sr);
     s_.r[15] -= 4;
-    bus_.write32(s_.r[15], saved_pc);
-    s_.pc = bus_.read32(s_.vbr + static_cast<uint32_t>(vector) * 4);
+    write(s_.r[15], 4, saved_pc);
+    s_.pc = read(s_.vbr + static_cast<uint32_t>(vector) * 4, 4);
 }
 
 void Cpu::raise_interrupt(int level, int vector) {
@@ -126,16 +126,14 @@ uint32_t Cpu::delay_slot(uint32_t target) {
     const uint32_t slot_address = s_.pc;  // já aponta para a instrução depois do desvio
     const uint32_t branch_address = op_address_;
     if (slot_address & 1) throw Exception{kVectorAddressError, slot_address};
-    const uint16_t slot = bus_.read16(slot_address);
+    const uint16_t slot = static_cast<uint16_t>(read(slot_address, 2));
     if (is_slot_illegal(slot)) throw Exception{kVectorSlotIllegal, branch_address};
     const OpHandler handler = table()[slot];
     if (!handler) throw Exception{kVectorIllegal, slot_address};
 
-    s_.in_delay_slot = true;
     op_address_ = slot_address;
     s_.pc = slot_address + 2;
     const uint32_t cycles = handler(*this, slot);
-    s_.in_delay_slot = false;
     op_address_ = branch_address;
     s_.pc = target;
     return cycles;
@@ -155,8 +153,7 @@ uint32_t Cpu::step() {
         if (OpHandler handler = table()[op]) return handler(*this, op);
         throw Exception{kVectorIllegal, op_address_};
     } catch (const Exception& e) {
-        s_.in_delay_slot = false;
-        enter_exception(e.vector, e.saved_pc);
+            enter_exception(e.vector, e.saved_pc);
     }
     return kExceptionCycles;
 }

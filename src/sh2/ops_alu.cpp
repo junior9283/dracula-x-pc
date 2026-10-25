@@ -1,16 +1,11 @@
 // Aritmética, comparação, lógica, deslocamento/rotação e controle do bit T.
-#include "sh2/cpu.hpp"
+#include "sh2/op_fields.hpp"
 
 namespace sh2 {
 namespace {
 
-constexpr uint32_t n_of(uint16_t op) { return (op >> 8) & 0xF; }
-constexpr uint32_t m_of(uint16_t op) { return (op >> 4) & 0xF; }
-constexpr uint32_t imm8(uint16_t op) { return op & 0xFF; }
-constexpr int32_t simm8(uint16_t op) { return static_cast<int8_t>(op & 0xFF); }
-
-inline void set_t(Sh2State& s, bool value) { s.sr = (s.sr & ~kSrT) | (value ? kSrT : 0); }
-inline bool get_t(const Sh2State& s) { return s.sr & kSrT; }
+inline void set_t(Sh2State& s, bool value) { set_sr_flag(s, kSrT, value); }
+inline bool get_t(const Sh2State& s) { return sr_flag(s, kSrT); }
 
 }  // namespace
 
@@ -89,21 +84,21 @@ void OpRegistrar::alu(OpcodeTable& t) {
     t.add("0010nnnnmmmm1000", [](Cpu& c, uint16_t op) -> uint32_t { set_t(c.s_, (c.s_.r[n_of(op)] & c.s_.r[m_of(op)]) == 0); return 1; });
 
     // ---- Lógica com imediato em R0 (zero-extend) e em byte @(R0,GBR)
-    t.add("11001001iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[0] &= imm8(op); return 1; });
-    t.add("11001011iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[0] |= imm8(op); return 1; });
-    t.add("11001010iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[0] ^= imm8(op); return 1; });
-    t.add("11001000iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t { set_t(c.s_, (c.s_.r[0] & imm8(op)) == 0); return 1; });
+    t.add("11001001iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[0] &= d8_of(op); return 1; });
+    t.add("11001011iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[0] |= d8_of(op); return 1; });
+    t.add("11001010iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.r[0] ^= d8_of(op); return 1; });
+    t.add("11001000iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t { set_t(c.s_, (c.s_.r[0] & d8_of(op)) == 0); return 1; });
     t.add("11001101iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t {
-        const uint32_t a = c.s_.gbr + c.s_.r[0]; c.store8(a, c.load8u(a) & imm8(op)); return 3;
+        const uint32_t a = c.s_.gbr + c.s_.r[0]; c.store8(a, c.load8u(a) & d8_of(op)); return 3;
     });
     t.add("11001111iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t {
-        const uint32_t a = c.s_.gbr + c.s_.r[0]; c.store8(a, c.load8u(a) | imm8(op)); return 3;
+        const uint32_t a = c.s_.gbr + c.s_.r[0]; c.store8(a, c.load8u(a) | d8_of(op)); return 3;
     });
     t.add("11001110iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t {
-        const uint32_t a = c.s_.gbr + c.s_.r[0]; c.store8(a, c.load8u(a) ^ imm8(op)); return 3;
+        const uint32_t a = c.s_.gbr + c.s_.r[0]; c.store8(a, c.load8u(a) ^ d8_of(op)); return 3;
     });
     t.add("11001100iiiiiiii", [](Cpu& c, uint16_t op) -> uint32_t {
-        set_t(c.s_, (c.load8u(c.s_.gbr + c.s_.r[0]) & imm8(op)) == 0); return 3;
+        set_t(c.s_, (c.load8u(c.s_.gbr + c.s_.r[0]) & d8_of(op)) == 0); return 3;
     });
     t.add("0100nnnn00011011", [](Cpu& c, uint16_t op) -> uint32_t {  // tas.b @Rn
         const uint32_t a = c.s_.r[n_of(op)];
@@ -114,8 +109,9 @@ void OpRegistrar::alu(OpcodeTable& t) {
     });
 
     // ---- Deslocamentos e rotações de 1 bit
-    t.add("0100nnnn00000000", [](Cpu& c, uint16_t op) -> uint32_t { auto& r = c.s_.r[n_of(op)]; set_t(c.s_, r >> 31); r <<= 1; return 1; });
-    t.add("0100nnnn00100000", [](Cpu& c, uint16_t op) -> uint32_t { auto& r = c.s_.r[n_of(op)]; set_t(c.s_, r >> 31); r <<= 1; return 1; });
+    const auto shift_left_1 = [](Cpu& c, uint16_t op) -> uint32_t { auto& r = c.s_.r[n_of(op)]; set_t(c.s_, r >> 31); r <<= 1; return 1; };
+    t.add("0100nnnn00000000", shift_left_1);  // shll
+    t.add("0100nnnn00100000", shift_left_1);  // shal (idêntico ao shll)
     t.add("0100nnnn00000001", [](Cpu& c, uint16_t op) -> uint32_t { auto& r = c.s_.r[n_of(op)]; set_t(c.s_, r & 1); r >>= 1; return 1; });
     t.add("0100nnnn00100001", [](Cpu& c, uint16_t op) -> uint32_t {
         auto& r = c.s_.r[n_of(op)]; set_t(c.s_, r & 1); r = static_cast<uint32_t>(static_cast<int32_t>(r) >> 1); return 1;

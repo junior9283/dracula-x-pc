@@ -25,6 +25,13 @@ struct Bus::Storage {
 namespace {
 using S = Bus::Storage;
 constexpr bool is_page_aligned(uint32_t v) { return (v & S::kPageMask) == 0; }
+
+// Normaliza para o espaço físico de 29 bits (os endereços 0x2... são alias de cache-through de 0x0...). Falso fora dele.
+constexpr bool to_physical(uint32_t& address) {
+    if ((address >> 29) > 1) return false;
+    address &= S::kAddressSpace - 1;
+    return true;
+}
 }  // namespace
 
 Bus::Bus() : storage_(std::make_unique<Storage>()) {}
@@ -57,52 +64,51 @@ void Bus::map_io(uint32_t base, uint32_t size, IoDevice& device) {
         storage_->pages.at((base + offset) >> S::kPageShift) = Page{nullptr, &device, offset, false, UINT32_MAX};
 }
 
-template <int Bytes>
-uint32_t Bus::read(uint32_t address) {
-    if ((address >> 29) <= 1) address &= S::kAddressSpace - 1;
-    else address = UINT32_MAX;  // fora do espaço mapeável
-
-    const uint32_t in_page = address & S::kPageMask;
-    if (address != UINT32_MAX && in_page + Bytes > S::kPageSize) {  // acesso desalinhado que cruza a página: byte a byte
-        uint32_t value = 0;
-        for (int i = 0; i < Bytes; ++i) value = (value << 8) | read<1>(address + i);
-        return value;
-    }
-    const Page* page = address == UINT32_MAX ? nullptr : &storage_->pages[address >> S::kPageShift];
-    if (page && page->data) {
-        uint32_t value = 0;
-        for (int i = 0; i < Bytes; ++i) value = (value << 8) | page->data[in_page + i];
-        return value;
-    }
-    if (page && page->device) return page->device->read(page->device_offset + in_page, Bytes);
-
+uint32_t Bus::unmapped(uint32_t address) {
     ++unmapped_count_;
     if (!first_unmapped_) first_unmapped_ = address;
     return 0;
 }
 
 template <int Bytes>
-void Bus::write(uint32_t address, uint32_t value) {
-    if ((address >> 29) <= 1) address &= S::kAddressSpace - 1;
-    else address = UINT32_MAX;
+uint32_t Bus::read(uint32_t address) {
+    const uint32_t original = address;
+    if (!to_physical(address)) return unmapped(original);
 
     const uint32_t in_page = address & S::kPageMask;
-    if (address != UINT32_MAX && in_page + Bytes > S::kPageSize) {
-        for (int i = 0; i < Bytes; ++i) write<1>(address + i, (value >> (8 * (Bytes - 1 - i))) & 0xFF);
+    if (in_page + Bytes > S::kPageSize) {  // acesso desalinhado que cruza a página: byte a byte
+        uint32_t value = 0;
+        for (int i = 0; i < Bytes; ++i) value = (value << 8) | read<1>(original + i);
+        return value;
+    }
+    const Page& page = storage_->pages[address >> S::kPageShift];
+    if (page.data) {
+        uint32_t value = 0;
+        for (int i = 0; i < Bytes; ++i) value = (value << 8) | page.data[in_page + i];
+        return value;
+    }
+    if (page.device) return page.device->read(page.device_offset + in_page, Bytes);
+    return unmapped(original);
+}
+
+template <int Bytes>
+void Bus::write(uint32_t address, uint32_t value) {
+    const uint32_t original = address;
+    if (!to_physical(address)) { unmapped(original); return; }
+
+    const uint32_t in_page = address & S::kPageMask;
+    if (in_page + Bytes > S::kPageSize) {
+        for (int i = 0; i < Bytes; ++i) write<1>(original + i, (value >> (8 * (Bytes - 1 - i))) & 0xFF);
         return;
     }
-    const Page* page = address == UINT32_MAX ? nullptr : &storage_->pages[address >> S::kPageShift];
-    if (page && page->data) {
-        if (page->read_only) return;
-        for (int i = 0; i < Bytes; ++i) page->data[in_page + i] = (value >> (8 * (Bytes - 1 - i))) & 0xFF;
+    const Page& page = storage_->pages[address >> S::kPageShift];
+    if (page.data) {
+        if (page.read_only) return;
+        for (int i = 0; i < Bytes; ++i) page.data[in_page + i] = (value >> (8 * (Bytes - 1 - i))) & 0xFF;
         return;
     }
-    if (page && page->device) {
-        page->device->write(page->device_offset + in_page, Bytes, value);
-        return;
-    }
-    ++unmapped_count_;
-    if (!first_unmapped_) first_unmapped_ = address;
+    if (page.device) { page.device->write(page.device_offset + in_page, Bytes, value); return; }
+    unmapped(original);
 }
 
 uint8_t Bus::read8(uint32_t address) { return static_cast<uint8_t>(read<1>(address)); }
@@ -113,8 +119,7 @@ void Bus::write16(uint32_t address, uint16_t value) { write<2>(address, value); 
 void Bus::write32(uint32_t address, uint32_t value) { write<4>(address, value); }
 
 std::span<uint8_t> Bus::ram_at(uint32_t address, size_t length) {
-    if ((address >> 29) <= 1) address &= S::kAddressSpace - 1;
-    else return {};
+    if (!to_physical(address)) return {};
     const Page& page = storage_->pages[address >> S::kPageShift];
     if (page.ram_index == UINT32_MAX) return {};
     auto& buffer = storage_->buffers[page.ram_index];

@@ -11,7 +11,6 @@ class OnChip : public saturn::IoDevice {
 public:
     static constexpr uint32_t kBase = 0xFFFFFE00;
 
-    OnChip();
     uint32_t read(uint32_t offset, int bytes) override;
     void write(uint32_t offset, int bytes, uint32_t value) override;
 
@@ -24,8 +23,8 @@ public:
 private:
     uint32_t read_register(uint32_t offset) const;
     void write_register(uint32_t offset, uint32_t value);
-    void divide_32(uint32_t dividend);
-    void divide_64();
+    void divide(int64_t dividend, int32_t divisor);
+    uint16_t& selected_ocr();
 
     uint8_t bytes_[0x200] = {};  // armazenamento genérico (INTC e demais)
     // DIVU

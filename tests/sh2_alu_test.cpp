@@ -3,13 +3,8 @@
 #include "sh2_harness.hpp"
 
 using testsupport::Sh2Rig;
-
-namespace {
-// Opcode com os campos n (bits 8–11) e m (bits 4–7).
-constexpr uint16_t nm(uint16_t base, int n, int m) { return static_cast<uint16_t>(base | (n << 8) | (m << 4)); }
-constexpr uint16_t n_(uint16_t base, int n) { return static_cast<uint16_t>(base | (n << 8)); }
-bool t(Sh2Rig& rig) { return rig.s().sr & 1; }
-}  // namespace
+using testsupport::nm;
+using testsupport::n_;
 
 TEST_CASE("add e add #imm (imediato com sinal)") {
     Sh2Rig rig;
@@ -27,14 +22,14 @@ TEST_CASE("addc: soma com T e gera carry") {
     rig.load({nm(0x300E, 1, 2)});
     rig.run(1);
     CHECK(rig.r(1) == 0u);
-    CHECK(t(rig));
+    CHECK(rig.t());
 
     Sh2Rig b;
     b.r(1) = 1; b.r(2) = 2;
     b.load({nm(0x300E, 1, 2)});
     b.run(1);
     CHECK(b.r(1) == 3u);
-    CHECK_FALSE(t(b));
+    CHECK_FALSE(b.t());
 }
 
 TEST_CASE("addv: T indica overflow com sinal") {
@@ -43,14 +38,14 @@ TEST_CASE("addv: T indica overflow com sinal") {
     rig.load({nm(0x300F, 1, 2)});
     rig.run(1);
     CHECK(rig.r(1) == 0x80000000u);
-    CHECK(t(rig));
+    CHECK(rig.t());
 
     Sh2Rig b;
     b.r(1) = 1; b.r(2) = 1;
     b.load({nm(0x300F, 1, 2)});
     b.run(1);
     CHECK(b.r(1) == 2u);
-    CHECK_FALSE(t(b));
+    CHECK_FALSE(b.t());
 }
 
 TEST_CASE("sub, subc (borrow) e subv (overflow)") {
@@ -65,14 +60,14 @@ TEST_CASE("sub, subc (borrow) e subv (overflow)") {
     b.load({nm(0x300A, 1, 2)});
     b.run(1);
     CHECK(b.r(1) == 0xFFFFFFFFu);
-    CHECK(t(b));
+    CHECK(b.t());
 
     Sh2Rig c;
     c.r(1) = 0x80000000; c.r(2) = 1;
     c.load({nm(0x300B, 1, 2)});
     c.run(1);
     CHECK(c.r(1) == 0x7FFFFFFFu);
-    CHECK(t(c));
+    CHECK(c.t());
 }
 
 TEST_CASE("neg e negc") {
@@ -90,7 +85,7 @@ TEST_CASE("neg e negc") {
         b.load({nm(0x600A, 1, 2)});
         b.run(1);
         CHECK(b.r(1) == k.result);
-        CHECK(t(b) == k.t_out);
+        CHECK(b.t() == k.t_out);
     }
 }
 
@@ -108,7 +103,7 @@ TEST_CASE("cmp/eq, hs, ge, hi, gt: sem sinal e com sinal") {
         rig.r(1) = k.rn; rig.r(2) = k.rm;
         rig.load({k.op});
         rig.run(1);
-        CHECK(t(rig) == k.expect);
+        CHECK(rig.t() == k.expect);
     }
 }
 
@@ -125,13 +120,13 @@ TEST_CASE("cmp/pz, cmp/pl, cmp/str e cmp/eq #imm,R0") {
         rig.r(1) = k.rn; rig.r(2) = k.rm;
         rig.load({k.op});
         rig.run(1);
-        CHECK(t(rig) == k.expect);
+        CHECK(rig.t() == k.expect);
     }
     Sh2Rig b;
     b.r(0) = 0xFFFFFFFF;
     b.load({0x8800 | 0xFF});  // cmp/eq #-1,r0
     b.run(1);
-    CHECK(t(b));
+    CHECK(b.t());
 }
 
 TEST_CASE("dt decrementa e testa zero") {
@@ -140,10 +135,10 @@ TEST_CASE("dt decrementa e testa zero") {
     rig.load({n_(0x4010, 1), n_(0x4010, 2)});
     rig.run(1);
     CHECK(rig.r(1) == 0u);
-    CHECK(t(rig));
+    CHECK(rig.t());
     rig.run(1);
     CHECK(rig.r(2) == 0xFFFFFFFFu);
-    CHECK_FALSE(t(rig));
+    CHECK_FALSE(rig.t());
 }
 
 TEST_CASE("exts.b/w e extu.b/w") {
@@ -172,7 +167,7 @@ TEST_CASE("and, or, xor, not e tst") {
     b.r(1) = 0x0F; b.r(2) = 0xF0;
     b.load({nm(0x2008, 1, 2)});  // tst r2,r1 -> T = (r1 & r2) == 0
     b.run(1);
-    CHECK(t(b));
+    CHECK(b.t());
 }
 
 TEST_CASE("operações com imediato em R0 (zero-extend): and, or, xor, tst") {
@@ -186,7 +181,7 @@ TEST_CASE("operações com imediato em R0 (zero-extend): and, or, xor, tst") {
     rig.run(1);
     CHECK(rig.r(0) == 0u);
     rig.run(1);
-    CHECK(t(rig));                          // 0 & 1 == 0
+    CHECK(rig.t());                          // 0 & 1 == 0
 }
 
 TEST_CASE("operações em byte @(R0,GBR): and.b, or.b, xor.b, tst.b e tas.b") {
@@ -197,17 +192,17 @@ TEST_CASE("operações em byte @(R0,GBR): and.b, or.b, xor.b, tst.b e tas.b") {
     rig.run(1);  CHECK(rig.bus.read8(0x06000104) == 0x03);   // and.b
     rig.run(1);  CHECK(rig.bus.read8(0x06000104) == 0x83);   // or.b
     rig.run(1);  CHECK(rig.bus.read8(0x06000104) == 0x82);   // xor.b
-    rig.run(1);  CHECK_FALSE(t(rig));                         // tst.b: 0x82 & 0x80 != 0
+    rig.run(1);  CHECK_FALSE(rig.t());                         // tst.b: 0x82 & 0x80 != 0
 
     Sh2Rig b;
     b.r(1) = 0x06000200;
     b.bus.write8(0x06000200, 0x00);
     b.load({n_(0x401B, 1), n_(0x401B, 1)});  // tas.b @r1 ×2
     b.run(1);
-    CHECK(t(b));                              // era 0
+    CHECK(b.t());                              // era 0
     CHECK(b.bus.read8(0x06000200) == 0x80);
     b.run(1);
-    CHECK_FALSE(t(b));                        // já tinha o bit 7
+    CHECK_FALSE(b.t());                        // já tinha o bit 7
 }
 
 TEST_CASE("deslocamentos e rotações de 1 bit atualizam T") {
@@ -230,7 +225,7 @@ TEST_CASE("deslocamentos e rotações de 1 bit atualizam T") {
         rig.load({k.op});
         rig.run(1);
         CHECK(rig.r(1) == k.result);
-        CHECK(t(rig) == k.t_out);
+        CHECK(rig.t() == k.t_out);
     }
 }
 
@@ -245,15 +240,15 @@ TEST_CASE("deslocamentos fixos de 2, 8 e 16 bits não mexem em T") {
     rig.run(1);  CHECK(rig.r(1) == 0x00345678u);  // shlr8
     rig.run(1);  CHECK(rig.r(1) == 0x56780000u);  // shll16
     rig.run(1);  CHECK(rig.r(1) == 0x00005678u);  // shlr16
-    CHECK(t(rig));
+    CHECK(rig.t());
 }
 
 TEST_CASE("clrt, sett e clrmac") {
     Sh2Rig rig;
     rig.s().mach = 5; rig.s().macl = 6;
     rig.load({0x0018, 0x0008, 0x0028});  // sett ; clrt ; clrmac
-    rig.run(1);  CHECK(t(rig));
-    rig.run(1);  CHECK_FALSE(t(rig));
+    rig.run(1);  CHECK(rig.t());
+    rig.run(1);  CHECK_FALSE(rig.t());
     rig.run(1);
     CHECK(rig.s().mach == 0u);
     CHECK(rig.s().macl == 0u);
