@@ -70,6 +70,10 @@ std::vector<FileEntry> list_files(const DiscImage& disc) {
     return files;
 }
 
+bool is_in_data_track(const DiscImage& disc, const FileEntry& entry) {
+    return uint64_t(entry.lba) + (uint64_t(entry.size) + kUserSectorSize - 1) / kUserSectorSize <= disc.data_sector_count();
+}
+
 std::vector<uint8_t> read_file(const DiscImage& disc, const FileEntry& entry) {
     return read_extent(disc, entry.lba, entry.size);
 }

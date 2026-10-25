@@ -26,8 +26,7 @@ size_t extract_all(const DiscImage& disc, const fs::path& out, bool force) {
     std::ofstream manifest(out / "manifest.txt");
     size_t extracted = 0;
     for (const auto& entry : list_files(disc)) {
-        // Arquivos fantasmas que cobrem as faixas de áudio (ex.: CD3) ficam depois da faixa de dados.
-        if (uint64_t(entry.lba) + (entry.size + kUserSectorSize - 1) / kUserSectorSize > disc.data_sector_count()) {
+        if (!is_in_data_track(disc, entry)) {
             manifest << "# ignorado (fora da faixa de dados): " << entry.path << '\n';
             continue;
         }
