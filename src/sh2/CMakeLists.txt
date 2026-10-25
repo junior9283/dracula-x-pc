@@ -1,0 +1,5 @@
+file(GLOB SH2_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+add_library(sh2 STATIC ${SH2_SOURCES})
+target_include_directories(sh2 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(sh2 PUBLIC saturn)
+target_compile_features(sh2 PUBLIC cxx_std_20)
