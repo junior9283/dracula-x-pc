@@ -6,6 +6,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_subdirectory(src/saturnfs)
 add_subdirectory(src/audio)
+add_subdirectory(src/saturn)
 enable_testing()
 add_subdirectory(tests)
 add_executable(dxpc-extract src/tools/extract_main.cpp)

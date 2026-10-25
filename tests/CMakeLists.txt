@@ -4,5 +4,5 @@ FetchContent_MakeAvailable(Catch2)
 
 file(GLOB TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*_test.cpp)
 add_executable(tests ${TEST_SOURCES})
-target_link_libraries(tests PRIVATE saturnfs dxpc_audio Catch2::Catch2WithMain)
+target_link_libraries(tests PRIVATE saturnfs dxpc_audio saturn Catch2::Catch2WithMain)
 add_test(NAME tests COMMAND tests)
