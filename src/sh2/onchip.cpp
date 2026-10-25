@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "saturn/lane.hpp"
+
 namespace sh2 {
 namespace {
 
@@ -18,12 +20,6 @@ constexpr uint8_t kTocrOcrs = 0x10;
 
 uint32_t frt_divider(uint8_t tcr) {
     switch (tcr & 3) { case 0: return 8; case 1: return 32; case 2: return 128; default: return 0; }  // 3 = clock externo: não conta
-}
-
-// Faixa de bits de um acesso de 8/16 bits dentro de um registrador de 32 bits (big-endian).
-struct Lane { uint32_t shift, mask; };
-Lane lane_of(uint32_t offset, int bytes) {
-    return bytes == 2 ? Lane{(offset & 2) ? 0u : 16u, 0xFFFFu} : Lane{8 * (3 - (offset & 3)), 0xFFu};
 }
 
 bool within_ticks(uint16_t from, uint16_t target, uint64_t ticks) {  // `target` é atingido em (from, from + ticks]?
@@ -97,9 +93,7 @@ void OnChip::write_register(uint32_t offset, uint32_t value) {
 uint32_t OnChip::read(uint32_t offset, int bytes) {
     if (offset >= kDivuBase && offset < kDivuEnd) {
         const uint32_t word = read_register(offset & ~3u);
-        if (bytes == 4) return word;
-        const Lane lane = lane_of(offset, bytes);
-        return (word >> lane.shift) & lane.mask;
+        return saturn::extract_lane(word, offset, bytes);
     }
     uint32_t value = 0;
     for (int i = 0; i < bytes; ++i) {
@@ -123,13 +117,7 @@ uint32_t OnChip::read(uint32_t offset, int bytes) {
 
 void OnChip::write(uint32_t offset, int bytes, uint32_t value) {
     if (offset >= kDivuBase && offset < kDivuEnd) {
-        uint32_t word = read_register(offset & ~3u);
-        if (bytes != 4) {
-            const Lane lane = lane_of(offset, bytes);
-            word = (word & ~(lane.mask << lane.shift)) | ((value & lane.mask) << lane.shift);
-            value = word;
-        }
-        write_register(offset & ~3u, value);
+        write_register(offset & ~3u, saturn::insert_lane(read_register(offset & ~3u), offset, bytes, value));
         return;
     }
     for (int i = 0; i < bytes; ++i) {
