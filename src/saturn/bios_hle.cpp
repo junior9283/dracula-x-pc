@@ -21,7 +21,18 @@ std::string hex(uint32_t v) {
 
 }  // namespace
 
-BiosHle::BiosHle(Bus& bus, Scu& scu) : bus_(bus), scu_(scu) {}
+BiosHle::BiosHle(Bus& bus, Scu& scu) : bus_(bus), scu_(scu) {
+    register_service(kSlotSetVector, [this](sh2::Cpu& cpu) {
+        const auto& s = cpu.state();
+        bus_.write32(kHandlerTable + s.r[4] * 4, s.r[5]);
+    });
+    register_service(kSlotScuMask, [this](sh2::Cpu& cpu) {
+        auto& s = cpu.state();
+        const uint32_t old = scu_.read(0xA0, 4);
+        scu_.write(0xA0, 4, (old & s.r[4]) | s.r[5]);
+        s.r[0] = old;
+    });
+}
 
 void BiosHle::return_from_interrupt(sh2::Sh2State& s) {  // rte: PC e SR empilhados pela entrada da exceção
     s.pc = bus_.read32(s.r[15]);
@@ -78,22 +89,14 @@ bool BiosHle::handle(sh2::Cpu& cpu) {
         throw MachineError("exceção sem tratamento: vetor " + std::to_string(index - kExceptionIndexBase) + ", PC salvo " + hex(bus_.read32(s.r[15])));
 
     const uint32_t slot = index < kRamSlotIndex ? index * 4 : kServiceTableBase + (index - kRamSlotIndex) * 4;
-    switch (slot) {
-        case kSlotSetVector:
-            bus_.write32(kHandlerTable + s.r[4] * 4, s.r[5]);
-            break;
-        case kSlotScuMask: {
-            const uint32_t old = scu_.read(0xA0, 4);
-            scu_.write(0xA0, 4, (old & s.r[4]) | s.r[5]);
-            s.r[0] = old;
-            break;
-        }
-        default:
-            if (strict_)
-                throw MachineError("serviço do BIOS não implementado: slot " + hex(slot) + " (retorno " + hex(s.pr) + ", r4=" + hex(s.r[4]) + ", r5=" + hex(s.r[5]) + ")");
-            if (calls_.size() < kMaxLoggedCalls) calls_.push_back({slot, s.pr, {s.r[4], s.r[5], s.r[6], s.r[7]}});
+    s.pc = s.pr;  // retorno por rts; o serviço pode sobrescrever o PC
+    if (auto service = services_.find(slot); service != services_.end()) {
+        service->second(cpu);
+    } else {
+        if (strict_)
+            throw MachineError("serviço do BIOS não implementado: slot " + hex(slot) + " (retorno " + hex(s.pr) + ", r4=" + hex(s.r[4]) + ", r5=" + hex(s.r[5]) + ")");
+        if (calls_.size() < kMaxLoggedCalls) calls_.push_back({slot, s.pr, {s.r[4], s.r[5], s.r[6], s.r[7]}});
     }
-    s.pc = s.pr;  // rts
     return true;
 }
 

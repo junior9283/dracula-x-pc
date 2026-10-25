@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <array>
 #include <stdexcept>
@@ -35,7 +36,13 @@ public:
         std::array<uint32_t, 4> args;  // r4–r7
     };
 
+    // Serviço nativo: chamado com PC já igual ao PR (retorno por rts); pode alterar o PC para não retornar (ex.: carga e salto).
+    using Service = std::function<void(sh2::Cpu&)>;
+
     BiosHle(Bus& bus, Scu& scu);
+
+    // Associa um serviço ao endereço do slot (ROM, 0x00000000–0x00000FFF, ou RAM, 0x06000200–0x060003FF).
+    void register_service(uint32_t slot, Service service) { services_[slot] = std::move(service); }
 
     // Preenche as tabelas e ajusta VBR da CPU.
     void install(sh2::Cpu& cpu);
@@ -59,6 +66,7 @@ private:
     Bus& bus_;
     Scu& scu_;
     bool strict_ = true;
+    std::map<uint32_t, Service> services_;
     std::vector<Call> calls_;
     std::vector<uint8_t> rom_table_;
 };

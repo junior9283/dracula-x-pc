@@ -32,16 +32,18 @@ void print_state(saturn::Machine& m) {
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::cerr << "uso: dxpc-run <arquivo.cue> [--frames N] [--trace arquivo] [--lenient-bios]\n";
+        std::cerr << "uso: dxpc-run <arquivo.cue> [--frames N] [--trace arquivo] [--lenient-bios] [--peek endereço]...\n";
         return 2;
     }
     int frames = 5;
     std::string trace_file;
     bool lenient = false;
+    std::vector<uint32_t> peeks;
     for (int i = 2; i < argc; ++i) {
         if (!std::strcmp(argv[i], "--frames") && i + 1 < argc) frames = std::atoi(argv[++i]);
         else if (!std::strcmp(argv[i], "--trace") && i + 1 < argc) trace_file = argv[++i];
         else if (!std::strcmp(argv[i], "--lenient-bios")) lenient = true;
+        else if (!std::strcmp(argv[i], "--peek") && i + 1 < argc) peeks.push_back(static_cast<uint32_t>(std::strtoul(argv[++i], nullptr, 0)));
         else { std::cerr << "argumento desconhecido: " << argv[i] << '\n'; return 2; }
     }
 
@@ -52,6 +54,8 @@ int main(int argc, char** argv) {
 
         saturn::Machine machine(std::move(disc));
         machine.set_bios_strict(!lenient);
+        std::map<int, uint64_t> interrupts_taken;
+        machine.on_interrupt_taken = [&](int, int vector) { ++interrupts_taken[vector]; };
         machine.boot();
         int completed = 0;
         try {
@@ -81,6 +85,9 @@ int main(int argc, char** argv) {
                       << " r4=" << hex(entry.second.args[0]) << " r5=" << hex(entry.second.args[1]) << " r6=" << hex(entry.second.args[2]) << '\n';
         for (uint8_t cmd : machine.cd().unknown_commands()) std::cout << "comando de CD block desconhecido: " << hex(cmd) << '\n';
         for (uint8_t cmd : machine.smpc().unknown_commands()) std::cout << "comando de SMPC desconhecido: " << hex(cmd) << '\n';
+        std::cout << "SCU: IMS=" << hex(machine.scu().read(0xA0, 4)) << " IST=" << hex(machine.scu().read(0xA4, 4)) << '\n';
+        for (const auto& [vector, count] : interrupts_taken) std::cout << "interrupções atendidas, vetor " << hex(vector) << ": " << count << '\n';
+        for (uint32_t address : peeks) std::cout << "[" << hex(address) << "] = " << hex(machine.bus().read32(address)) << '\n';
         if (!trace_file.empty()) {
             machine.recorder().save(trace_file);
             std::cout << "traço gravado em " << trace_file << '\n';

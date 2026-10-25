@@ -44,6 +44,7 @@ public:
 
 private:
     void advance_hardware(uint32_t cycles);
+    void load_first_read_file(sh2::Cpu& cpu);
 
     std::unique_ptr<saturnfs::SectorReader> disc_;
     Bus bus_;

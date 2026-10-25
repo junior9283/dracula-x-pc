@@ -26,13 +26,13 @@ std::unique_ptr<saturnfs::DiscImage> make_disc(const std::string& tag) {
 }
 
 // Chama um serviço do BIOS como o jogo faria: lê o ponteiro no slot e salta para ele com PR = retorno.
-void call_slot(Machine& m, uint32_t slot, uint32_t r4 = 0, uint32_t r5 = 0) {
+void call_slot(Machine& m, uint32_t slot, uint32_t r4 = 0, uint32_t r5 = 0, uint32_t r6 = 0) {
     constexpr uint32_t kReturn = 0x06003000;
     m.bus().write16(kReturn, 0x0009);
     auto& s = m.master().state();
     s.pc = m.bus().read32(slot);
     s.pr = kReturn;
-    s.r[4] = r4; s.r[5] = r5;
+    s.r[4] = r4; s.r[5] = r5; s.r[6] = r6;
     m.step_master();
 }
 }  // namespace
@@ -179,4 +179,39 @@ TEST_CASE("tratador registrado pelo serviço é chamado como sub-rotina (rts); a
     CHECK(s.r[1] == 0x1234u);                         // r1 restaurado
     CHECK(s.mach == 0xAAAAu);
     CHECK(s.sr == 0u);                                // SR do rte
+}
+
+TEST_CASE("BIOS: o serviço 0x5EC carrega o primeiro arquivo da raiz no endereço de leitura inicial do IP e salta para ele") {
+    SyntheticIso iso("T-9527G", "V1.400");
+    iso.add("0.BIN", "BOOT-APP").add("A.TXT", "alfa");
+    auto sectors = iso.sectors();
+    sectors[0][0xE2] = 0x18;
+    sectors[0][0xF0] = 0x06; sectors[0][0xF1] = 0x00; sectors[0][0xF2] = 0x40; sectors[0][0xF3] = 0x80;   // 1st read address = 0x06004080
+    sectors[0][0x100] = 0xAF; sectors[0][0x101] = 0xFE; sectors[0][0x102] = 0x00; sectors[0][0x103] = 0x09;
+    Machine m(std::make_unique<saturnfs::DiscImage>(saturnfs::DiscImage::open(write_single_track_disc(make_temp_dir("m12"), sectors))));
+    m.boot();
+
+    call_slot(m, 0x000005EC, 0x40, 0, 0x10);
+
+    CHECK(m.master().state().pc == 0x06004080u);
+    CHECK(m.bus().read8(0x06004080) == 'B');
+    CHECK(m.bus().read8(0x06004087) == 'P');
+    CHECK(m.bus().read8(0x06004088) == 0);            // não copia além do tamanho do arquivo
+}
+
+TEST_CASE("BIOS: o tamanho de leitura inicial do cabeçalho (+0xF4) limita o que é carregado") {
+    SyntheticIso iso("T-9527G", "V1.400");
+    iso.add("0.BIN", "BOOT-APP");
+    auto sectors = iso.sectors();
+    sectors[0][0xE2] = 0x18;
+    sectors[0][0xF0] = 0x06; sectors[0][0xF1] = 0x00; sectors[0][0xF2] = 0x40; sectors[0][0xF3] = 0x80;
+    sectors[0][0xF7] = 0x04;                                                                               // 1st read size = 4
+    sectors[0][0x100] = 0xAF; sectors[0][0x101] = 0xFE; sectors[0][0x102] = 0x00; sectors[0][0x103] = 0x09;
+    Machine m(std::make_unique<saturnfs::DiscImage>(saturnfs::DiscImage::open(write_single_track_disc(make_temp_dir("m13"), sectors))));
+    m.boot();
+
+    call_slot(m, 0x000005EC);
+
+    CHECK(m.bus().read8(0x06004083) == 'T');
+    CHECK(m.bus().read8(0x06004084) == 0);
 }
