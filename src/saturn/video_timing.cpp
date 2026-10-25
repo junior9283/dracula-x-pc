@@ -2,8 +2,6 @@
 
 #include <algorithm>
 
-#include "saturn/lane.hpp"
-
 namespace saturn {
 namespace {
 constexpr uint32_t kTvstatOffset = 0x04;
@@ -41,8 +39,22 @@ uint16_t VideoTiming::tvstat() const {
 }
 
 uint32_t VideoTiming::read(uint32_t offset, int bytes) {
-    const uint32_t word = (offset & ~3u) == (kTvstatOffset & ~3u) ? uint32_t(tvstat()) << ((kTvstatOffset & 2) ? 0 : 16) : 0;
-    return extract_lane(word, offset, bytes);
+    uint32_t value = 0;
+    for (int i = 0; i < bytes; ++i) {
+        const uint32_t at = offset + i;
+        uint8_t byte = at < regs_.size() ? regs_[at] : 0;
+        if (at == kTvstatOffset) byte = tvstat() >> 8;
+        if (at == kTvstatOffset + 1) byte = tvstat() & 0xFF;
+        value = (value << 8) | byte;
+    }
+    return value;
+}
+
+void VideoTiming::write(uint32_t offset, int bytes, uint32_t value) {
+    for (int i = 0; i < bytes; ++i) {
+        const uint32_t at = offset + i;
+        if (at < regs_.size() && at != kTvstatOffset && at != kTvstatOffset + 1) regs_[at] = (value >> (8 * (bytes - 1 - i))) & 0xFF;
+    }
 }
 
 }  // namespace saturn

@@ -1,11 +1,13 @@
 #pragma once
 #include <functional>
 #include <memory>
+#include <span>
 #include <vector>
 
 #include "saturn/bios_hle.hpp"
 #include "saturn/bus.hpp"
 #include "saturn/cdblock.hpp"
+#include "saturn/devices.hpp"
 #include "saturn/scu.hpp"
 #include "saturn/smpc.hpp"
 #include "saturn/video_timing.hpp"
@@ -23,6 +25,10 @@ public:
     ~Machine();
 
     void boot();
+    // Boot com a BIOS real (só para desenvolvimento/validação): mapeia a ROM em 0 e reseta o mestre pelos vetores de reset.
+    void boot_with_bios(std::span<const uint8_t> rom);
+    // Executa até o PC do mestre valer `pc` (devolve true) ou até `max_cycles` (false).
+    bool run_until_pc(uint32_t pc, uint64_t max_cycles);
     // Executa uma instrução do mestre (tratando os gatilhos do BIOS), avança o hardware e devolve os ciclos gastos.
     uint32_t step_master();
     void run_cycles(uint64_t cycles);
@@ -56,6 +62,11 @@ private:
     BiosHle bios_{bus_, scu_};
     sh2::ExecutionRecorder recorder_;
     bool slave_running_ = false;
+    bool bios_rom_ = false;
+    int64_t slave_credit_ = 0;
+    StorageDevice vdp1_regs_{0x100}, scsp_regs_{0x1000};
+    ConstantDevice abus_{0xFF};
+    SoundMailboxStub sound_mailbox_;   // provisório até o 68000 (etapa 4)
 };
 
 }  // namespace saturn

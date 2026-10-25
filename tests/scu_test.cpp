@@ -161,3 +161,11 @@ TEST_CASE("TVSTAT é legível no mapa de E/S (VDP2 + 0x04)") {
     CHECK((rig.timing.read(0x04, 2) & 0x08) != 0);
     CHECK(rig.timing.read(0x00, 2) == 0u);
 }
+
+TEST_CASE("VideoTiming guarda os registradores do VDP2 (exceto TVSTAT, que reflete o tempo)") {
+    TimingRig rig;
+    rig.timing.write(0x00, 2, 0x8001);    // TVMD
+    rig.timing.write(0x04, 2, 0xFFFF);    // TVSTAT é somente leitura: a escrita não vale
+    CHECK(rig.timing.read(0x00, 2) == 0x8001u);
+    CHECK((rig.timing.read(0x04, 2) & 0x0C) == 0u);
+}
