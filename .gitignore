@@ -1,0 +1,6 @@
+build-local/
+data-local/
+*.bin
+*.cue
+*.iso
+.superpowers/
