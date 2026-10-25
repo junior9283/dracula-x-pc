@@ -2,8 +2,9 @@
 
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <string>
+
+#include "saturnfs/strutil.hpp"
 
 namespace saturnfs {
 namespace {
@@ -11,16 +12,10 @@ namespace {
 constexpr std::array<uint8_t, 4> kDviMagic = {'D', 'V', 'I', '.'};
 constexpr size_t kHeadBytes = 16;
 
-std::string lower(std::string_view s) {
-    std::string out(s);
-    std::ranges::transform(out, out.begin(), [](unsigned char c) { return std::tolower(c); });
-    return out;
-}
-
 }  // namespace
 
 FileKind classify(std::string_view path, std::span<const uint8_t> head) {
-    const std::string name = lower(path);
+    const std::string name = to_lower(path);
     const auto dot = name.rfind('.');
     const std::string ext = dot == std::string::npos ? "" : name.substr(dot + 1);
 
