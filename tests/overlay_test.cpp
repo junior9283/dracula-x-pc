@@ -31,6 +31,7 @@ TEST_CASE("known_overlay_base: grupos de memória conhecidos") {
     CHECK(saturnfs::known_overlay_base("SUB.PRG") == 0x060D6000u);
     CHECK_FALSE(saturnfs::known_overlay_base("WEAPON0.PRG").has_value());
     CHECK_FALSE(saturnfs::known_overlay_base("QUALQUER.PRG").has_value());
+    CHECK_FALSE(saturnfs::known_overlay_base("").has_value());
 }
 
 TEST_CASE("parse_overlay lê a tabela de ponteiros do cabeçalho e o endereço de carga") {

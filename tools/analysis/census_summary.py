@@ -1,6 +1,6 @@
 """Resume data-local/ghidra/census.txt (linhas `CENSO <programa> chave=valor ...`) em tabelas Markdown e totais.
 
-Uso: python3 -I tools/analysis/census_summary.py data-local/ghidra/census.txt
+Uso: python3 -I tools/analysis/census_summary.py data-local/ghidra/census.txt  (linhas FALHA/fim são ignoradas)
 """
 import sys
 

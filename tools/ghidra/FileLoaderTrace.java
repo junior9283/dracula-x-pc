@@ -1,4 +1,4 @@
-// Para cada nome de arquivo (NOME.EXT\0) embutido no programa, lista as referências a ele (de onde e em qual função).
+// Para cada nome de arquivo (NOME.EXT\0) embutido no programa, lista as referências a ele e o literal de r5 (destino) das 4 instruções anteriores.
 // Uso: analyzeHeadless <projeto> dxpc -process 0.BIN -noanalysis -readOnly -scriptPath tools/ghidra -postScript FileLoaderTrace.java
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.address.Address;

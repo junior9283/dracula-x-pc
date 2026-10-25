@@ -27,8 +27,10 @@ int main(int argc, char** argv) {
             for (int16_t s : pcm) energy += double(s) * s;
             auto stem = std::filesystem::path(entry.file.path).stem().string();
             audio::write_wav_pcm16(std::filesystem::path(argv[2]) / (stem + ".wav"), pcm, audio::kDviSampleRate, 2);
-            std::cout << stem << ' ' << pcm.size() / 2 / double(audio::kDviSampleRate) << " s  laço=" << header.loop_start_frames / double(audio::kDviSampleRate)
-                      << " s  rms=" << std::sqrt(energy / pcm.size()) << '\n';
+            std::cout << stem << ' ' << pcm.size() / 2 / double(audio::kDviSampleRate) << " s  laço=";
+            if (header.loop_start_frames) std::cout << *header.loop_start_frames / double(audio::kDviSampleRate) << " s";
+            else std::cout << "sem laço";
+            std::cout << "  rms=" << (pcm.empty() ? 0.0 : std::sqrt(energy / pcm.size())) << '\n';
         }
     } catch (const std::exception& e) {
         std::cerr << "erro: " << e.what() << '\n';

@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -16,12 +17,12 @@ struct DviChannelState {
 struct DviHeader {
     uint32_t header_size;
     uint32_t body_size;
-    uint32_t loop_start_frames;  // INFERÊNCIA: início do trecho em laço, em quadros estéreo
+    std::optional<uint32_t> loop_start_frames;  // INFERÊNCIA: início do laço, em quadros; vazio se o campo é 0xFFFFFFFF (sem laço)
     DviChannelState channel[2];
 };
 
-// Lança std::runtime_error se o arquivo tem menos de 0x800 bytes, magic != "DVI.", header_size + body_size != tamanho
-// do arquivo, ou índice de passo > 88.
+// Lança std::runtime_error se o arquivo tem menos de 0x800 bytes, magic != "DVI.", header_size != 0x800,
+// header_size + body_size != tamanho do arquivo, ou índice de passo > 88.
 DviHeader parse_dvi_header(std::span<const uint8_t> file);
 
 // IMA ADPCM estéreo (grupos de 8 bytes = 4 bytes L + 4 bytes R, nibble alto primeiro). Devolve PCM 16 bits

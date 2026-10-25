@@ -3,7 +3,7 @@
 Legenda: **[obs]** observado · **[inf]** inferido. Reproduzir: `python3 -I tools/analysis/stage_music_table.py data-local/disc`.
 
 ## Método e confiança
-A tabela de estágios do `0.BIN` (`0x06047818`, 24 bytes por registro; ver `01-overlays.md` §2) traz um campo `flags` com prefixo `0xE0` nos registros de fase. **[inf]** O byte baixo desse campo é o número da faixa `SD<hex>.PCM`. Evidências: nos 35 registros com prefixo `0xE0`, o byte baixo é sempre uma faixa que existe no disco (35/35); aparecem pares coerentes (`RSTAGE12` repete `STAGE_12`; `STAGE_01` e `STAGE_0X` coincidem); a ocupação cobre 24 das 49 faixas.
+A tabela de estágios do `0.BIN` (`0x06047818`, 24 bytes por registro; ver `01-overlays.md` §2) traz um campo `flags` com prefixo `0xE0` nos registros de fase. **[inf]** O byte baixo desse campo é o número da faixa `SD<hex>.PCM`. Evidências: nos 35 registros com prefixo `0xE0`, o byte baixo cai sempre em `0x01–0x31` (35/35), mas como as faixas existentes são exatamente `0x01–0x31` isso é **evidência fraca**; a evidência real são os pares coerentes (`RSTAGE12` repete `STAGE_12`; `STAGE_01` e `STAGE_0X` coincidem); a ocupação cobre 24 das 49 faixas.
 
 ## Tabela (gerada)
 | Overlay | id | faixa |

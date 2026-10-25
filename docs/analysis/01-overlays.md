@@ -16,9 +16,9 @@ Destinos literais lidos do código [obs]:
 | `ASCII.FON` | `0x00252000` | Work RAM-L |
 
 ## 2. Tabela de estágios [obs]
-`0x06047818 … 0x060481C0`: 103 registros de 24 bytes `{ptr .PRG, ptr .CHR, ptr .MAP, id, flags, extra}`; os ponteiros são para os nomes. Cobre `STAGE_nn`, `RSTAGEnn` (castelo invertido), `BOSS_nn`, `BOSS_Rnn`, `WARP/RWARP`, `LIBRARY`, `STAGE_MA/EX/0X`. Muitos registros repetem `STAGE_01` (id `0xB06`, flags `0xFF000000`) — [inf] espaços reservados. `id` (`0xB03`–`0xB37`) tem faixa compatível com um índice de banco de som/música (55 arquivos `SD_*.CRT`); a confirmar na tarefa 4. As últimas 3 entradas (`0x06048178…`) são tabelas de nomes de `.MAP` alternativos (A/B), não registros.
+`0x06047818 … 0x060481C0`: 100 registros de 24 bytes (+ 3 tabelas de nomes alternativos no fim) `{ptr .PRG, ptr .CHR, ptr .MAP, id, flags, extra}`; os ponteiros são para os nomes. Cobre `STAGE_nn`, `RSTAGEnn` (castelo invertido), `BOSS_nn`, `BOSS_Rnn`, `WARP/RWARP`, `LIBRARY`, `STAGE_MA/EX/0X`. Muitos registros repetem `STAGE_01` (id `0xB06`, flags `0xFF000000`) — [inf] espaços reservados. `id` (`0xB03`–`0xB37`) tem faixa compatível com um índice de banco de som/música (55 arquivos `SD_*.CRT`); a confirmar na tarefa 4. As últimas 3 entradas (`0x06048178…`) são tabelas de nomes de `.MAP` alternativos (A/B), não registros.
 
-## 3. Endereço de carga dos overlays [obs, validado]
+## 3. Endereço de carga dos overlays [obs nos 5 com destino literal; inf nos outros 73]
 Para os overlays sem destino literal, a base é estimada por votação (ponteiro − deslocamento de prólogo `sts.l pr,@-r15`) em `tools/analysis/overlay_bases.py`. **Validação:** nos 5 casos com destino literal conhecido o método acerta exatamente (`0x060A5000`×3, `0x06066000`, `0x060DC000`), com votos 3–131 contra 1–12 do segundo colocado.
 
 | Grupo | Base | Arquivos |
@@ -30,7 +30,7 @@ Para os overlays sem destino literal, a base é estimada por votação (ponteiro
 | Submenu | `0x060D6000` | `SUB` |
 | Dados | — | `WEAPON0.PRG`, `WEAPON1.PRG` (786 432 B cada; votos empatados → não são código) |
 
-Sobreposições com base diferente (`dxpc-overlays`) [obs]: apenas `MARIA/RICHTER/RICHTER2` × `T_*`. [inf] Esses personagens nunca carregam os familiares do Alucard (o `ALUCARD.PRG` termina em `0x060CE480`, antes de `0x060CF000`). **A confirmar** na tarefa 7 pela tabela de chamadas.
+Sobreposições com base diferente (`dxpc-overlays`) [obs]: apenas `MARIA/RICHTER/RICHTER2` × `T_*`. [inf] Esses personagens nunca carregam os familiares do Alucard (o `ALUCARD.PRG` termina em `0x060CE480`, antes de `0x060CF000`). **Não confirmado**; levado às perguntas abertas de `06-mapa-do-jogo.md` §5.
 
 ## 4. Formato do cabeçalho de `.PRG` [obs]
 O arquivo começa com uma tabela de ponteiros de 32 bits (big-endian) para dentro do próprio overlay, terminada por palavra não-ponteiro (ex.: `STAGE_00.PRG`: 10 ponteiros `0x060EB1BC…`, depois `0`; `TITLE.PRG`: 3). `parse_overlay` devolve essa tabela; o significado de cada entrada (pontos de entrada/ganchos por fase) é pendência da tarefa 7.

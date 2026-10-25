@@ -8,9 +8,9 @@ Legenda: **[obs]** observado · **[inf]** inferido · **[pad]** convenção. Rep
 | Offset | Campo (big-endian) |
 |---|---|
 | `+0x00` | `"DVI."` |
-| `+0x04` | tamanho do cabeçalho = `0x800` |
+| `+0x04` | tamanho do cabeçalho = `0x800` (o parser rejeita qualquer outro valor) |
 | `+0x08` | tamanho do corpo em bytes (= quadros estéreo: 1 byte por quadro) |
-| `+0x0C` | **[inf]** início do trecho em laço, em quadros (ex.: `SD01` = 21,1 s; `SD04` = 112,1 s a 44,1 kHz) |
+| `+0x0C` | **[inf]** início do trecho em laço, em quadros; `0xFFFFFFFF` = sem laço (11 faixas: `SD1D–SD22`, `SD2D–SD31`) (ex.: `SD01` = 21,1 s; `SD04` = 112,1 s a 44,1 kHz) |
 | `+0x10` | `int16` predictor L; `+0x12` = `0x7FFF` em todas as faixas (ignorado) |
 | `+0x14` | índice de passo L (0..88) |
 | `+0x20` | `int16` predictor R; `+0x22` = `0x0000` em todas (ignorado) |
@@ -22,10 +22,10 @@ Corpo: **IMA/DVI ADPCM estéreo** (tabela de passos padrão de 89 entradas, ajus
 - Evidência estatística: histograma de nibbles típico de IMA (códigos pequenos dominam, simétrico em sinal); índices do cabeçalho sempre em 0..88.
 - Critério decisivo: **fração da energia abaixo de 20 Hz** (um decodificador errado vira passeio aleatório com 86–98% nessa faixa; música correta tem ~0%). `tools/analysis/dvi_probe.py` testou 4 + 9×2 intercalações × {IMA, Yamaha ADPCM-B}: só “IMA, grupos de 4 bytes, nibble alto primeiro” chegou a 0,00% (o segundo melhor: 14%).
 - **Lição:** autocorrelação de lag 1, energia de alta frequência e correlação L/R **não** discriminam (passeios aleatórios também as satisfazem). O erro inicial (nibble baixo primeiro) passou por elas e só foi pego pela energia subsônica.
-- Resultado nas 49 faixas decodificadas: energia <20 Hz mediana 0,001% (máx. 1,5%, `SD16`), RMS mediano 4138, clipping ≤ 0,02%, |DC| ≤ 4440.
+- Resultado nas 49 faixas decodificadas: energia <20 Hz mediana 0,001% (máx. 1,5%, `SD16`), RMS por faixa com mediana ≈ 4024 (`dxpc-music-export`), clipping ≤ 0,02%, |DC| ≤ 4440 (medidas por scripts ad hoc, não versionados; `dvi_probe.py` reproduz só a comparação de layouts).
 
 ## Pendências / incertezas
-- **Taxa de amostragem: 44 100 Hz é inferência** (`audio::kDviSampleRate`); o cabeçalho não a informa e não achei a rotina de decodificação no código do jogo. Evidências a favor: 99,99% da energia abaixo de 4–18 kHz; durações de 2 a 5 min coerentes com trilhas de jogo. Se a taxa real for outra, as faixas soarão com a velocidade/tom trocados — confirmar na tarefa 6 pelo código do driver.
+- **Taxa de amostragem: 44 100 Hz é inferência** (`audio::kDviSampleRate`); o cabeçalho não a informa e não achei a rotina de decodificação no código do jogo. **Evidência fraca:** 99,99% da energia abaixo de 4–18 kHz não distingue 22,05 de 44,1 kHz, e as durações (3,5 s a 306 s; 24 das 49 faixas abaixo de 2 min) não discriminam. Discriminador possível: comparar tom e andamento com o áudio de 44,1 kHz de `OPENING.AVI`, se um tema se repetir. Se a taxa real for outra, as faixas soarão com a velocidade/tom trocados — confirmar na tarefa 6 pelo código do driver.
 - Significado exato de `+0x0C` (laço) a confirmar ouvindo/observando o ponto de laço.
 - Onde o decodificador roda: o programa do 68000 do SCSP **não** contém tabela IMA nem de ADPCM (apenas tabela de seno e curva de volume); nenhuma tabela IMA existe em arquivo ≤2 MB do disco. Logo a decodificação deve ser calculada (ou ocorrer fora dos arquivos varridos) — a investigar na tarefa 6.
 

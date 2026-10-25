@@ -35,6 +35,7 @@ uint32_t be32(std::span<const uint8_t> bytes, size_t offset) {
 
 std::optional<uint32_t> known_overlay_base(std::string_view name) {
     const std::string lowered = to_lower(name);
+    if (lowered.empty()) return std::nullopt;
     for (const auto& group : kGroups) {
         if (std::ranges::find(group.exact, lowered) != group.exact.end()) return group.base;
         for (auto prefix : group.prefixes)

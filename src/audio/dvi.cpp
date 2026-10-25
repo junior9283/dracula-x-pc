@@ -9,6 +9,7 @@ namespace {
 
 constexpr size_t kHeaderBytes = 0x800;
 constexpr int kMaxStepIndex = 88;
+constexpr uint32_t kNoLoop = 0xFFFFFFFF;
 constexpr size_t kGroupBytes = 8;       // 4 bytes de L + 4 bytes de R
 constexpr size_t kBytesPerChannelGroup = 4;
 
@@ -46,7 +47,8 @@ DviHeader parse_dvi_header(std::span<const uint8_t> file) {
     DviHeader h{};
     h.header_size = be32(file, 4);
     h.body_size = be32(file, 8);
-    h.loop_start_frames = be32(file, 0xC);
+    if (uint32_t loop = be32(file, 0xC); loop != kNoLoop) h.loop_start_frames = loop;
+    if (h.header_size != kHeaderBytes) throw std::runtime_error("tamanho de cabeçalho DVI inesperado: " + std::to_string(h.header_size));
     if (uint64_t(h.header_size) + h.body_size != file.size())
         throw std::runtime_error("tamanho do corpo inconsistente com o tamanho do arquivo");
 

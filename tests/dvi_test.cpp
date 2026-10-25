@@ -14,12 +14,12 @@ void put32(std::vector<uint8_t>& v, size_t off, uint32_t x) {
 
 // Arquivo DVI sintético: cabeçalho de 0x800 bytes + corpo.
 std::vector<uint8_t> dvi_file(const std::vector<uint8_t>& body, uint32_t body_size_field, int16_t pred_l = 0, uint32_t idx_l = 0,
-                              int16_t pred_r = 100, uint32_t idx_r = 0) {
+                              int16_t pred_r = 100, uint32_t idx_r = 0, uint32_t loop = 0x1000, uint32_t header_size = 0x800) {
     std::vector<uint8_t> f(0x800 + body.size(), 0);
     f[0] = 'D'; f[1] = 'V'; f[2] = 'I'; f[3] = '.';
-    put32(f, 4, 0x800);
+    put32(f, 4, header_size);
     put32(f, 8, body_size_field);
-    put32(f, 0xC, 0x1000);
+    put32(f, 0xC, loop);
     put32(f, 0x10, uint32_t(uint16_t(pred_l)) << 16 | 0x7FFF);
     put32(f, 0x14, idx_l);
     put32(f, 0x20, uint32_t(uint16_t(pred_r)) << 16);
@@ -36,7 +36,7 @@ TEST_CASE("parse_dvi_header lê tamanhos, laço e estado inicial dos dois canais
 
     CHECK(h.header_size == 0x800);
     CHECK(h.body_size == 16);
-    CHECK(h.loop_start_frames == 0x1000);
+    CHECK(h.loop_start_frames == 0x1000u);
     CHECK(h.channel[0].predictor == -1570);
     CHECK(h.channel[0].index == 47);
     CHECK(h.channel[1].predictor == -2219);
@@ -80,4 +80,20 @@ TEST_CASE("decode_dvi: corpo truncado decodifica só grupos completos de 8 bytes
     CHECK(pcm.size() == 16);
 }
 
-TEST_CASE("kDviSampleRate é 44100 Hz (inferência documentada)") { CHECK(audio::kDviSampleRate == 44100); }
+TEST_CASE("parse_dvi_header: laço 0xFFFFFFFF significa sem laço (11 das 49 faixas reais)") {
+    auto looped = audio::parse_dvi_header(dvi_file(std::vector<uint8_t>(8), 8));
+    auto one_shot = audio::parse_dvi_header(dvi_file(std::vector<uint8_t>(8), 8, 0, 0, 100, 0, 0xFFFFFFFF));
+
+    REQUIRE(looped.loop_start_frames.has_value());
+    CHECK(*looped.loop_start_frames == 0x1000u);
+    CHECK_FALSE(one_shot.loop_start_frames.has_value());
+}
+
+TEST_CASE("parse_dvi_header rejeita header_size diferente de 0x800 (o cabeçalho viraria áudio)") {
+    // dvi_file monta 0x800 bytes de cabeçalho + corpo; com header_size=16 e body_size=0x7F0 a soma não bate com o arquivo,
+    // então encurtamos para 16 + 0x7F0 bytes para isolar a regra do tamanho de cabeçalho.
+    auto file = dvi_file(std::vector<uint8_t>(0x7F0), 0x7F0, 0, 0, 100, 0, 0x1000, 16);
+    file.resize(16 + 0x7F0);
+
+    CHECK_THROWS_WITH(audio::parse_dvi_header(file), Catch::Matchers::ContainsSubstring("cabeçalho"));
+}
