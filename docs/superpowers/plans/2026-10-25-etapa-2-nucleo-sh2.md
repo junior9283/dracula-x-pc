@@ -6,7 +6,7 @@
 
 **Architecture:** Bibliotecas `sh2` (CPU + periféricos internos), `saturn` (barramento, SCU, SMPC, CD block, tempo de vídeo, BIOS HLE, `Machine`) e `dxpc-run`. O jogo é servido a partir de uma `SectorSource` (nesta etapa lida do disco do desenvolvedor; na etapa 6 passa a vir do pacote local). Todo comportamento de hardware é coberto por testes com programas SH-2 escritos à mão; a validação com o jogo real é por marcos (M1–M3).
 
-**Tech Stack:** C++20, CMake/Ninja, Catch2 (já no projeto). Nenhuma dependência nova.
+**Tech Stack:** C++20, CMake/Ninja, Catch2 (já no projeto). Nenhuma dependência nova no produto. **Referência local de desenvolvimento:** Mednafen 1.32.1 + BIOS do próprio usuário (ver abaixo).
 
 **Spec:** `docs/superpowers/specs/2026-10-25-dracula-x-pc-design.md` (seção "Revisão após a etapa 1") · **Fatos de partida:** `docs/analysis/00`–`06`
 
@@ -16,7 +16,14 @@
 - Nenhum dado do jogo no repositório; `data-local/` ignorado pelo git; nenhum BIOS real é usado nem distribuído (boot por HLE).
 - Estratégia: **interpretador SH-2 primeiro**, sem ISO e sem emulador externo em runtime (nesta etapa a fonte de setores é o disco do desenvolvedor, via `SectorSource`).
 - Dois SH-2 (mestre/escravo) a 28,63636 MHz; o escravo só executa após o comando SMPC `SSHON`.
+- **Mednafen e a BIOS do usuário são só referência local de comportamento:** nenhum código, dado, estado ou captura deles entra no repositório; a BIOS nunca é copiada (só linkada em `data-local/`); o produto final não depende de BIOS (HLE).
 - Nunca `git push` sem pedido explícito.
+
+## Referência: Mednafen (já preparada)
+
+- `tools/reference/mednafen_record.sh <cue> <pasta> <duração> [instantes…]` roda o Mednafen em X virtual (sem janela na sessão do usuário, home isolado) e produz `audio.wav` (48 kHz) e quadros PNG 352×240 por instante. Notas aprendidas: o SDL2 usa o Wayland da sessão se `WAYLAND_DISPLAY` existir (por isso o script força X11 virtual); o OpenGL por software é lento (usa-se `-video.driver sdl`); o `.mov` do `-qtrecord` guarda quadros com largura ×30; **injeção de teclas (F5/F9) não funcionou** — por isso save states e depurador do Mednafen **não** são usados.
+- **Linha do tempo real medida (BIOS japonesa v1.01 + este disco):** 0–13 s abertura da BIOS (cacos de vidro, logo SEGA SATURN, “Produced by or under license from SEGA”); ≈20–26 s o jogo mostra o logo da Konami (`KONAMI.AVI`), depois “Konami Computer Entertainment Nagoya” e o aviso da TrueMotion (~37–40 s). Referência para a ordem de eventos dos marcos M2/M3 (o nosso boot por HLE dispensa a abertura da BIOS).
+- **BIOS real como teste do núcleo (Task 13):** rodar a BIOS do usuário no nosso núcleo é a validação mais forte de CPU/SCU/SMPC/CD block; só em desenvolvimento.
 
 ## Fatos de partida (docs/analysis)
 
@@ -175,3 +182,14 @@
 
 - [ ] **Step 1:** Programa SH-2 sintético em laço (ALU + acessos à RAM) executado por 200 milhões de ciclos; reportar MIPS em `-O2` e em `-O3`.
 - [ ] **Step 2:** Meta: **≥ 100 MIPS** neste computador (o jogo exige ~50 MIPS somando os dois SH-2 a 28,6 MHz, ≈ 1 CPI). Se ficar abaixo, registrar o gargalo medido e a otimização escolhida (cache de blocos decodificados, tabela de despacho) antes de seguir; registrar o resultado em `docs/analysis/07-boot-real.md`. Commit.
+
+### Task 13: Validação com a BIOS real do usuário (somente desenvolvimento)
+
+**Files:** Create `docs/analysis/08-validacao-bios.md`, opção `--bios <arquivo>` em `src/tools/run_main.cpp`, `src/saturn/machine.cpp` (modo BIOS), `tests/bios_boot_test.cpp` (**só roda com `DXPC_BIOS` e `DXPC_CUE` definidos; senão `SKIP`**)
+
+**Interfaces:**
+- Consumes: `Machine`, `SectorSource`. Produces: `Machine::boot_with_bios(std::span<const uint8_t> rom)` (mapeia a ROM em `0x00000000` como somente leitura, reseta o mestre pelos vetores de reset da ROM, escravo parado) e `uint32_t Machine::run_until_pc(uint32_t pc, uint64_t max_cycles)` (devolve ciclos gastos ou lança por tempo esgotado).
+
+- [ ] **Step 1:** Rodar a BIOS real no núcleo até a primeira fase de vídeo/SMPC/CD; registrar o primeiro acesso a registrador ou comando não implementado (periférico, instrução ou CD block) e implementá-lo com teste de unidade; repetir até a BIOS terminar a inicialização e **transferir o controle ao IP.BIN** (`pc == 0x06002100`, após o boot do disco, sem a animação gráfica, que depende do VDP).
+- [ ] **Step 2:** Nesse instante, comparar com o HLE: despejar `0x06000200–0x060003FF` (tabela de ponteiros do BIOS e variáveis de sistema) e as `0x06002000–0x060037FF` (IP.BIN carregado). Para cada divergência em relação à inicialização do HLE (Task 10), ajustar o HLE; o IP.BIN carregado deve ser idêntico ao do disco.
+- [ ] **Step 3:** Registrar em `08-validacao-bios.md` os periféricos/instruções que a BIOS real exigiu, os valores reais das variáveis de sistema que o IP.BIN lê (`0x06000248`, `0x06000260`) e o que mudou no HLE. Não copiar trechos da ROM para o repositório. Commit.
