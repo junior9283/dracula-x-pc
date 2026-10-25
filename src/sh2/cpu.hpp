@@ -5,6 +5,7 @@
 
 #include "saturn/bus.hpp"
 #include "sh2/onchip.hpp"
+#include "sh2/trace.hpp"
 
 namespace sh2 {
 
@@ -55,6 +56,8 @@ public:
     Sh2State& state() { return s_; }
     int id() const { return id_; }
     OnChip& onchip() { return onchip_; }
+    // Liga (ou desliga, com nullptr) o gravador de endereços executados; desligado por padrão.
+    void set_recorder(ExecutionRecorder* recorder) { recorder_ = recorder; }
 
     // Pede uma interrupção (nível 1–15; 16 = NMI, que ignora SR.I). Fica pendente até ser atendida entre duas instruções.
     void raise_interrupt(int level, int vector);
@@ -86,6 +89,7 @@ private:
     int id_;
     Sh2State s_;
     OnChip onchip_;
+    ExecutionRecorder* recorder_ = nullptr;
     uint32_t op_address_ = 0;  // endereço da instrução em execução
 
     static const OpcodeTable& table();

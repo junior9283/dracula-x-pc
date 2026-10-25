@@ -130,6 +130,7 @@ uint32_t Cpu::delay_slot(uint32_t target) {
     if (is_slot_illegal(slot)) throw Exception{kVectorSlotIllegal, branch_address};
     const OpHandler handler = table()[slot];
     if (!handler) throw Exception{kVectorIllegal, slot_address};
+    if (recorder_) recorder_->record(slot_address);
 
     op_address_ = slot_address;
     s_.pc = slot_address + 2;
@@ -150,7 +151,10 @@ uint32_t Cpu::step() {
         if (s_.pc & 1) throw Exception{kVectorAddressError, s_.pc};
         const uint16_t op = bus_.read16(s_.pc);
         s_.pc += 2;
-        if (OpHandler handler = table()[op]) return handler(*this, op);
+        if (OpHandler handler = table()[op]) {
+            if (recorder_) recorder_->record(op_address_);
+            return handler(*this, op);
+        }
         throw Exception{kVectorIllegal, op_address_};
     } catch (const Exception& e) {
             enter_exception(e.vector, e.saved_pc);
