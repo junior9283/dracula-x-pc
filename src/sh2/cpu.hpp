@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include <functional>
 
 #include "saturn/bus.hpp"
 
@@ -43,6 +44,7 @@ class Cpu;
 struct OpRegistrar {
     static void data(OpcodeTable& table);    // ops_data.cpp
     static void alu(OpcodeTable& table);     // ops_alu.cpp
+    static void branch(OpcodeTable& table);  // ops_branch.cpp
 };
 
 class Cpu {
@@ -54,11 +56,17 @@ public:
     Sh2State& state() { return s_; }
     int id() const { return id_; }
 
+    // Pede uma interrupção (nível 1–15; 16 = NMI, que ignora SR.I). Fica pendente até ser atendida entre duas instruções.
+    void raise_interrupt(int level, int vector);
+    bool sleeping() const { return sleeping_; }
+    std::function<void(int level, int vector)> on_interrupt_taken;
+
 private:
     friend struct OpRegistrar;
 
-    // Acessos à memória pelo barramento; endereço desalinhado → AddressError (tratado em step()).
-    struct AddressError { uint32_t address; };
+    // Exceção de CPU lançada por acessos/instruções inválidos e tratada em step(): vetor e PC a empilhar.
+    struct Exception { int vector; uint32_t saved_pc; };
+    // Acessos à memória pelo barramento; endereço desalinhado → Exception{9} (erro de endereço).
     uint32_t load8s(uint32_t a);
     uint32_t load16s(uint32_t a);
     uint32_t load32(uint32_t a);
@@ -67,6 +75,9 @@ private:
     void store32(uint32_t a, uint32_t v);
 
     void enter_exception(int vector, uint32_t saved_pc);
+    // Executa a instrução do delay slot (em op_address_+2) e só então salta para `target`. Desvios no slot → exceção 6.
+    uint32_t delay_slot(uint32_t target);
+    bool take_interrupt_if_due();
 
     saturn::Bus& bus_;
     int id_;
@@ -74,6 +85,11 @@ private:
     uint32_t op_address_ = 0;  // endereço da instrução em execução
 
     static const OpcodeTable& table();
+
+    int pending_level_ = 0;      // 0 = nenhuma
+    int pending_vector_ = 0;
+    bool sleeping_ = false;
+    bool inhibit_irq_ = false;   // LDC/LDC.L ...,SR bloqueia a interrupção por uma instrução
 };
 
 }  // namespace sh2

@@ -101,7 +101,11 @@ void OpRegistrar::data(OpcodeTable& t) {
     });
 
     // ---- Registradores de controle e de sistema: LDC/LDS (de registrador e de @Rm+), STC/STS (para registrador e @-Rn)
-    t.add("0100mmmm00001110", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.sr = c.s_.r[(op >> 8) & 0xF] & kSrWritable; return 1; });
+    t.add("0100mmmm00001110", [](Cpu& c, uint16_t op) -> uint32_t {
+        c.s_.sr = c.s_.r[(op >> 8) & 0xF] & kSrWritable;
+        c.inhibit_irq_ = true;  // nenhuma interrupção entre o LDC SR e a instrução seguinte
+        return 1;
+    });
     t.add("0100mmmm00011110", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.gbr = c.s_.r[(op >> 8) & 0xF]; return 1; });
     t.add("0100mmmm00101110", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.vbr = c.s_.r[(op >> 8) & 0xF]; return 1; });
     t.add("0100mmmm00001010", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.mach = c.s_.r[(op >> 8) & 0xF]; return 1; });
@@ -109,7 +113,8 @@ void OpRegistrar::data(OpcodeTable& t) {
     t.add("0100mmmm00101010", [](Cpu& c, uint16_t op) -> uint32_t { c.s_.pr = c.s_.r[(op >> 8) & 0xF]; return 1; });
 
     t.add("0100mmmm00000111", [](Cpu& c, uint16_t op) -> uint32_t {
-        const uint32_t m = (op >> 8) & 0xF; const uint32_t v = c.load32(c.s_.r[m]); c.s_.r[m] += 4; c.s_.sr = v & kSrWritable; return 3;
+        const uint32_t m = (op >> 8) & 0xF; const uint32_t v = c.load32(c.s_.r[m]); c.s_.r[m] += 4; c.s_.sr = v & kSrWritable;
+        c.inhibit_irq_ = true; return 3;
     });
     t.add("0100mmmm00010111", [](Cpu& c, uint16_t op) -> uint32_t {
         const uint32_t m = (op >> 8) & 0xF; const uint32_t v = c.load32(c.s_.r[m]); c.s_.r[m] += 4; c.s_.gbr = v; return 3;
