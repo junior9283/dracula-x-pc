@@ -1,0 +1,37 @@
+# Compila e empacota o port para macOS (universal, Intel e Apple Silicon) e roda os testes nas duas arquiteturas.
+# Disparo manual (Actions > macOS > Run workflow) ou ao publicar uma tag "v*". Nenhum dado do jogo é usado ou distribuído.
+name: macOS
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  empacotar:
+    name: Empacotar (universal, x86_64 e arm64)
+    runs-on: macos-14   # Apple Silicon; o Xcode compila as duas arquiteturas
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependências
+        run: brew install cmake ninja
+      - name: Compilar, testar (arm64) e gerar os .dmg
+        run: tools/package/build-macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dracula-x-macos
+          path: dist/*.dmg
+          if-no-files-found: error
+
+  testes-intel:
+    name: Testes no Intel (x86_64 nativo)
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependências
+        run: brew install cmake ninja
+      - name: Compilar e rodar a suíte
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target tests
+          build/tests/tests

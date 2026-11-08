@@ -19,9 +19,8 @@ constexpr uint8_t kFilterRangeMode = 0x40;
 constexpr uint16_t kRejected = 0xFF00, kPeriodicFlag = 0x2000;   // PERI: bit 5 do byte de status em CR1
 constexpr uint64_t kQuietAfterCommand = 100000;  // ≈ 3,5 ms: a resposta de um comando é lida bem antes
 constexpr uint8_t kStatusPause = 0x01, kStatusPlay = 0x03;
-constexpr size_t kInfoBytes = 12;                  // bytes por arquivo no GetFileInfo
 constexpr int kTocEntries = 102;                   // 99 faixas + A0 (primeira) + A1 (última) + A2 (lead-out)
-constexpr uint32_t kTocDataControl = 0x41000000, kTocAudioPointer = 0x01000000;
+constexpr uint32_t kTocDataControl = 0x41000000;
 
 enum Command : uint8_t {
     kGetStatus = 0x00, kGetHwInfo = 0x01, kGetToc = 0x02, kGetSessionInfo = 0x03, kInit = 0x04, kEndDataTransfer = 0x06, kPlay = 0x10, kSeek = 0x11,

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -49,7 +50,7 @@ void print_state(saturn::Machine& m) {
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::cerr << "uso: dxpc-run <arquivo.cue> [--frames N] [--trace arquivo] [--coverage] [--lenient-bios] [--peek endereço]... [--watch-write endereço]... [--stop-on-write endereço=valor] [--bios arquivo (só desenvolvimento: a BIOS é do próprio usuário)] [--boot-font arquivo (4096 bytes da RAM descompactada pelo BIOS)] [--until-pc endereço] [--log-cd N] [--log-cd-context] [--history-on-cd-reject] [--stop-on-unmapped] [--dump-ram arquivo (1 MB da Work RAM-H, uso local)] [--screenshot arquivo.png (VDP2 ao fim da execução)] [--pad quadro:máscara (botões pressionados a partir do quadro; Start = 0x0800)] [--poke quadro:endereço=valor (escrita de 16 bits no início do quadro)] [--sample-pc quadro] [--shot quadro:arquivo.png (repetível)] [--vdp1-log de:até (nº de pixels de sprite por quadro)] [--flow-frame quadro (lista, em ordem, os PCs novos executados no quadro)] [--layers máscara: bits 0-3 NBG0..3, bit 4 sprites, bit 5 RBG0] [--dump-video prefixo (VRAM/CRAM/registradores do VDP1 e VDP2, uso local)] [--history N] [--history-from-frame N] [--wav arquivo.wav (saída do SCSP, 44,1 kHz estéreo)] [--save-state quadro:arquivo (repetível; grava o estado ao fim daquele quadro, depois das capturas)] [--load-state arquivo (carrega após o boot, antes do primeiro quadro; --frames/--shot/--pad/--save-state passam a contar a partir do frame() da máquina carregada)]\n";
+        std::cerr << "uso: dxpc-run <arquivo.cue> [--frames N] [--trace arquivo] [--coverage] [--lenient-bios] [--peek endereço]... [--watch-write endereço]... [--stop-on-write endereço=valor] [--bios arquivo (só desenvolvimento: a BIOS é do próprio usuário)] [--boot-font arquivo (4096 bytes da RAM descompactada pelo BIOS)] [--until-pc endereço] [--log-cd N] [--log-cd-context] [--history-on-cd-reject] [--stop-on-unmapped] [--dump-ram arquivo (1 MB da Work RAM-H, uso local)] [--screenshot arquivo.png (VDP2 ao fim da execução)] [--pad quadro:máscara (botões pressionados a partir do quadro; Start = 0x0800)] [--poke quadro:endereço=valor (escrita de 16 bits no início do quadro)] [--frame-log arquivo.csv (por quadro: microssegundos de emulação e de desenho do vídeo, como no executável)] [--sample-pc quadro] [--shot quadro:arquivo.png (repetível)] [--vdp1-log de:até (nº de pixels de sprite por quadro)] [--flow-frame quadro (lista, em ordem, os PCs novos executados no quadro)] [--layers máscara: bits 0-3 NBG0..3, bit 4 sprites, bit 5 RBG0] [--dump-video prefixo (VRAM/CRAM/registradores do VDP1 e VDP2, uso local)] [--history N] [--history-from-frame N] [--wav arquivo.wav (saída do SCSP, 44,1 kHz estéreo)] [--save-state quadro:arquivo (repetível; grava o estado ao fim daquele quadro, depois das capturas)] [--load-state arquivo (carrega após o boot, antes do primeiro quadro; --frames/--shot/--pad/--save-state passam a contar a partir do frame() da máquina carregada)]\n";
         return 2;
     }
     int frames = 5;
@@ -67,6 +68,7 @@ int main(int argc, char** argv) {
     int sample_frame = -1, flow_frame = -1, vdp1_log_from = -1, vdp1_log_to = -1;
     struct Poke { int frame; uint32_t address; uint16_t value; };
     std::vector<Poke> pokes;   // escritas de 16 bits no início de um quadro (diagnóstico: trocar fase, flags...)
+    std::string frame_log_file;   // --frame-log: tempo de emulação e de desenho de cada quadro (CSV)
     std::vector<std::pair<int, uint16_t>> pad_events;   // (quadro, estado do controle 1: bit 0 = pressionado)
     uint32_t until_pc = 0;
     int log_cd = 0;
@@ -86,6 +88,7 @@ int main(int argc, char** argv) {
             if (*end != ':') throw std::invalid_argument("--pad: use quadro:máscara (bits 1 = pressionado: 0x0800 Start, 0x1000 Cima…)");
             pad_events.emplace_back(frame, static_cast<uint16_t>(std::strtoul(end + 1, nullptr, 0)));
         }
+        else if (!std::strcmp(argv[i], "--frame-log") && i + 1 < argc) frame_log_file = argv[++i];
         else if (!std::strcmp(argv[i], "--poke") && i + 1 < argc) {
             char* end = nullptr;
             Poke poke{};
@@ -245,6 +248,13 @@ int main(int argc, char** argv) {
             machine.scsp().set_audio_enabled(true);
             samples_out.reserve(size_t(frames) * 1500);
         }
+        std::optional<std::ofstream> frame_log_stream;
+        std::ofstream* frame_log = nullptr;
+        if (!frame_log_file.empty()) {
+            frame_log_stream.emplace(frame_log_file);
+            *frame_log_stream << "quadro,emulacao_us,video_us\n";
+            frame_log = &*frame_log_stream;
+        }
         const auto collect_audio = [&] {
             while (const size_t n = machine.scsp().drain_audio(chunk)) samples_out.insert(samples_out.end(), chunk.begin(), chunk.begin() + n);
         };
@@ -267,6 +277,14 @@ int main(int argc, char** argv) {
                             std::cout << ' ' << hex(machine.master().state().pc);
                         }
                         std::cout << '\n';
+                    } else if (frame_log) {
+                        const auto t0 = std::chrono::steady_clock::now();
+                        machine.run_frame();
+                        const auto t1 = std::chrono::steady_clock::now();
+                        frontend::capture_frame(machine, layer_mask);   // o executável desenha todo quadro
+                        const auto t2 = std::chrono::steady_clock::now();
+                        const auto us = [](auto a, auto b) { return std::chrono::duration_cast<std::chrono::microseconds>(b - a).count(); };
+                        *frame_log << completed << ',' << us(t0, t1) << ',' << us(t1, t2) << '\n';
                     } else {
                         machine.run_frame();
                     }

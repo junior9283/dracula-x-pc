@@ -17,7 +17,7 @@ using saturn::StateReader;
 using saturn::StateWriter;
 
 namespace {
-constexpr uint32_t kIpBase = 0x06002000, kCounter = 0x06004000, kLoop = 0x06002100;
+constexpr uint32_t kCounter = 0x06004000, kLoop = 0x06002100;
 constexpr uint32_t kCdCr1 = 0x05890018, kCdCr2 = 0x0589001C, kCdCr3 = 0x05890020, kCdCr4 = 0x05890024;
 
 // Disco sintético: IP com um laço que incrementa um contador na Work RAM e mexe nos registradores do SMPC/SCU/FRT.

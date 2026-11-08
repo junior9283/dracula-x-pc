@@ -39,3 +39,12 @@ Atalhos
   Os saves normais do jogo (memória interna do Saturn) são gravados sozinhos em dracula-x.bup.
 
 Opções de linha de comando: dracula-x --help
+
+macOS
+-----
+Abra o .dmg e arraste "Dracula X PC" para Aplicativos. Há três imagens: universal (serve para qualquer Mac), x86_64 (Intel) e
+arm64 (Apple Silicon: M1 ou mais novo). O app é assinado só "ad hoc" e não é notarizado pela Apple, então na primeira vez o macOS
+bloqueia a abertura: clique com o botão direito no app, escolha "Abrir" e confirme (ou, no Terminal:
+xattr -dr com.apple.quarantine "/Applications/Dracula X PC.app").
+Pasta de dados do usuário: ~/Library/Application Support/dracula-x-pc/dracula-x/
+Linha de comando: "/Applications/Dracula X PC.app/Contents/MacOS/dracula-x" --help

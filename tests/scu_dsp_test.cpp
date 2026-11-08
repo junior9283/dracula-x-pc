@@ -21,7 +21,7 @@ constexpr uint32_t dma_write(uint32_t ram, uint32_t count, uint32_t add_mode = 2
     return 0xC000'0000 | 1u << 12 | add_mode << 15 | ram << 8 | count;
 }
 constexpr uint32_t kNop = 0, kEnd = 0xF000'0000, kEndi = 0xF800'0000, kLps = 0xE800'0000;
-constexpr uint32_t kCt0 = 0xC, kCt1 = 0xD, kRa0 = 6, kWa0 = 7, kLop = 0xA, kMc0 = 0, kMc1 = 1, kSrcMc0 = 4, kSrcAll = 9;
+constexpr uint32_t kCt0 = 0xC, kCt1 = 0xD, kRa0 = 6, kWa0 = 7, kLop = 0xA, kMc0 = 0, kSrcMc0 = 4, kSrcAll = 9;
 constexpr uint32_t kMovM0ToA = 3u << 17 | 0u << 14, kMovM1ToP = 3u << 23 | 1u << 20, kAdd = 4u << 26, kAluToA = 2u << 17;
 
 struct DspRig {
