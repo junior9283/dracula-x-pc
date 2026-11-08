@@ -322,6 +322,24 @@ TEST_CASE("SCSP áudio: subir uma oitava (OCT = 1) dobra a taxa de leitura") {
     CHECK(out[2 * 5] == 1200);
 }
 
+TEST_CASE("SCSP áudio: a interpolação linear entre amostras vizinhas de saltos grandes não estoura 32 bits (sem estalo isolado)") {
+    Scsp scsp;
+    scsp.set_audio_enabled(true);
+    setup_slot(scsp, 0, 0x1000, 0, 0, 100);
+    std::vector<int16_t> square(100);
+    for (int i = 0; i < 100; ++i) square[i] = i % 2 ? int16_t(-30000) : int16_t(30000);
+    put_pcm16(scsp, 0x1000, square);
+    scsp.write_reg(0x10, 2, 0xD << 11);   // OCT = -3: 1/8 de amostra por quadro, varrendo todas as frações entre +30000 e -30000
+    key_on(scsp, 0);
+    advance_samples(scsp, 40);
+    const auto out = drain_all(scsp);
+    REQUIRE(out.size() == 80);
+    for (size_t i = 2; i < 40; ++i) {
+        CHECK(std::abs(out[2 * i]) <= 30000);                  // sempre entre as duas amostras vizinhas
+        CHECK(std::abs(out[2 * i] - out[2 * (i - 1)]) <= 8000);   // passo de 60000/8 por quadro, sem salto
+    }
+}
+
 TEST_CASE("SCSP áudio: DIPAN com o bit 4 desligado zera o canal esquerdo e ligado o direito (como o Mednafen); PCM 8 bits") {
     Scsp scsp;
     scsp.set_audio_enabled(true);

@@ -548,7 +548,7 @@ void Scsp::mix_audio() {
                 const uint32_t index = uint32_t(slot.position >> kPositionFractionBits);
                 const int32_t s0 = fetch_pcm(sa, w0, index), s1 = fetch_pcm(sa, w0, index + 1);
                 const int32_t fraction = int32_t((slot.position >> (kPositionFractionBits - 16)) & 0xFFFF);
-                sample = s0 + (((s1 - s0) * fraction) >> 16);
+                sample = s0 + int32_t((int64_t(s1 - s0) * fraction) >> 16);   // 64 bits: o produto passa de 2^31 com saltos grandes
             }
             // SDIR (bit 8) ignora o envelope e o TL.
             const int attenuation = (tl_word & 0x100) ? 0 : std::min(0x3FF, slot.attenuation + (tl_word & 0xFF) * 4);
