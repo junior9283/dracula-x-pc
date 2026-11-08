@@ -1,7 +1,12 @@
-# Dracula X PC (port nativo)
+# Dracula X PC (emulador dedicado)
 
-Port nativo para PC (Linux, Windows e macOS) do jogo de Sega Saturn *Akumajou Dracula X – Gekka no Yasoukyoku*
-(T-9527G v1.400), gerado localmente a partir da **sua própria imagem de disco**.
+Emulador dedicado, para PC (Linux, Windows e macOS), do jogo de Sega Saturn *Akumajou Dracula X – Gekka no Yasoukyoku*
+(T-9527G v1.400), com um aplicativo completo em volta: janela, controles, menu, save states e galeria da trilha sonora.
+Funciona a partir da **sua própria imagem de disco**.
+
+**O que é e o que não é.** O que roda nativamente no PC é o emulador e o aplicativo. **O jogo em si não é nativo**: o programa original do Saturn
+(código de máquina SH-2 e driver de som 68000, lidos do seu disco) é *interpretado* por um núcleo escrito do zero em C++. Não é um port recompilado.
+Converter esse código em código de PC (recompilação estática) é a meta de longo prazo e **ainda não foi feita**.
 
 Este repositório contém apenas código e ferramentas originais. **Nenhum dado do jogo é distribuído.**
 

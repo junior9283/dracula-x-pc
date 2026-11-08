@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dracula X PC — port nativo de Akumajou Dracula X (Sega Saturn)</title>
-<meta name="description" content="Port nativo para Linux, Windows e macOS de Akumajou Dracula X – Gekka no Yasoukyoku (Sega Saturn). Sem dados do jogo: use o seu próprio disco.">
+<title>Dracula X PC — emulador dedicado de Akumajou Dracula X (Sega Saturn)</title>
+<meta name="description" content="Emulador dedicado, para Linux, Windows e macOS, de Akumajou Dracula X – Gekka no Yasoukyoku (Sega Saturn), com menu, save states e galeria da trilha sonora. Sem dados do jogo: use o seu próprio disco.">
 <link rel="icon" href="assets/icon.png">
 <style>
 :root {
@@ -80,7 +80,7 @@ footer { margin-top: 48px; padding: 24px 0 40px; border-top: 1px solid var(--lin
     <img class="logo" src="assets/icon.png" alt="Ícone do projeto: lua crescente sobre um castelo">
     <div>
       <h1>Dracula X PC</h1>
-      <p>Port nativo para PC de <strong>Akumajou Dracula X – Gekka no Yasoukyoku</strong> (Sega Saturn, T-9527G v1.400). Roda no Linux e no Windows a partir da <strong>sua própria imagem de disco</strong>, sem BIOS e sem emulador de terceiros.</p>
+      <p>Emulador dedicado, para PC, de <strong>Akumajou Dracula X – Gekka no Yasoukyoku</strong> (Sega Saturn, T-9527G v1.400), com aplicativo completo em volta. Roda no Linux e no Windows a partir da <strong>sua própria imagem de disco</strong>, sem BIOS e sem emulador de terceiros. <strong>O jogo em si ainda não é nativo</strong>: o programa original roda dentro do emulador.</p>
       <div class="badges">
         <span class="badge">Linux x86_64</span>
         <span class="badge">Windows 64 bits</span>
@@ -106,7 +106,8 @@ footer { margin-top: 48px; padding: 24px 0 40px; border-top: 1px solid var(--lin
 
 <section id="visao">
   <h2>Visão geral</h2>
-  <p>O projeto executa o <strong>código original do jogo</strong> num núcleo escrito do zero em C++20 (dois SH-2, SCU com DSP, SMPC, bloco de CD, VDP1, VDP2, 68000 e SCSP) e o envolve num executável moderno: janela com SDL3, som, teclado e controles, menu próprio, save states e uma galeria da trilha sonora. Não é um emulador genérico de Saturn: ele só precisa fazer este jogo funcionar, e por isso dispensa a BIOS do console.</p>
+  <p>É um <strong>emulador dedicado</strong> a este jogo, escrito do zero em C++20: dois SH-2, SCU com DSP, SMPC, bloco de CD, VDP1, VDP2, 68000 e SCSP. Em volta dele há um aplicativo moderno: janela com SDL3, som, teclado e controles, menu próprio, save states e uma galeria da trilha sonora. Por ser feito para um único jogo, dispensa a BIOS do console.</p>
+  <div class="note"><strong>O que é nativo e o que não é.</strong> O emulador e o aplicativo rodam nativamente no PC. <strong>O jogo em si não é nativo</strong>: o programa original do Saturn (código de máquina SH-2 e o driver de som 68000, lidos do seu disco) é <em>interpretado</em> instrução por instrução. Não é um port recompilado. Converter esse código em código de PC, a recompilação estática, é a meta de longo prazo e <strong>ainda não foi feita</strong>.</div>
   <div class="cards">
     <div class="card"><h3>Nada do jogo no repositório</h3><p>O código e as ferramentas são originais. O jogo vem do <em>seu</em> disco, convertido localmente num pacote (<code>dracula-x.pak</code>) que nunca sai da sua máquina.</p></div>
     <div class="card"><h3>Sem BIOS</h3><p>Uma BIOS por software, escrita para o projeto, substitui a do console. Só é preciso a imagem do disco, e apenas uma vez.</p></div>
@@ -206,16 +207,16 @@ dracula-x --help</code></pre>
   <div class="note ok">Do título ao gameplay do <strong>estágio 1</strong> funciona, com Richter andando, subindo escadas, usando o chicote e pulando, com música e efeitos. Dezenas de outras fases carregam e desenham. <strong>Ninguém jogou o jogo inteiro</strong>: chefes e áreas avançadas ainda podem ter defeitos.</div>
   <table>
     <tr><th>Componente</th><th>Situação</th></tr>
-    <tr><td>SH-2 (mestre e escravo)</td><td><span class="tag ok">completo</span> interpretador, DMAC, FRT, divisão, cache, interrupções</td></tr>
+    <tr><td>SH-2 (mestre e escravo)</td><td><span class="tag ok">completo</span> <strong>interpretador</strong> (executa o programa original do jogo), DMAC, FRT, divisão, cache, interrupções</td></tr>
     <tr><td>SCU</td><td><span class="tag ok">completo</span> DMA direto e indireto, interrupções, <strong>DSP</strong> (VLIW de 48 bits)</td></tr>
     <tr><td>SMPC</td><td><span class="tag ok">completo</span> comandos usados pelo jogo e pelo BIOS, INTBACK, troca de relógio</td></tr>
     <tr><td>Bloco de CD</td><td><span class="tag ok">completo</span> comandos, filtros e partições, ISO 9660 com extensão XA, autenticação</td></tr>
     <tr><td>VDP1</td><td><span class="tag ok">completo</span> sprites, polígonos, linhas, Gouraud, malha, meia-transparência, clipping</td></tr>
     <tr><td>VDP2</td><td><span class="tag part">quase</span> NBG0–3, rolagem por linha, zoom, bitmap, prioridades, cálculo de cor, janelas; RBG0/RBG1 e janelas de linha e de sprite só com testes sintéticos (o jogo não os usa); falta mosaico e janela de cálculo de cor</td></tr>
-    <tr><td>68000 + SCSP</td><td><span class="tag part">quase</span> 68000 completo, síntese dos 32 slots, envelope, pan e DSP; efeitos de FM e LFO não são usados pelo jogo</td></tr>
+    <tr><td>68000 + SCSP</td><td><span class="tag part">quase</span> 68000 <strong>interpretado</strong> (executa o driver de som original), síntese dos 32 slots, envelope, pan e DSP; efeitos de FM e LFO não são usados pelo jogo</td></tr>
     <tr><td>BIOS</td><td><span class="tag ok">por software</span> o BIOS real só é usado em validação local, nunca distribuído</td></tr>
     <tr><td>Frontend</td><td><span class="tag ok">completo</span> menu, save states, remapeamento, galeria, pacote local</td></tr>
-    <tr><td>Recompilação estática (AOT)</td><td><span class="tag no">não feita</span> evolução futura: hoje o código é interpretado</td></tr>
+    <tr><td>Recompilação estática (jogo nativo)</td><td><span class="tag no">não feita</span> é a meta de longo prazo: hoje todo o código do jogo é interpretado</td></tr>
     <tr><td>macOS</td><td><span class="tag no">não testado</span> scripts prontos, sem Mac para validar</td></tr>
   </table>
 
@@ -302,6 +303,7 @@ tools/package/build-macos.sh   # gera dist/Dracula-X-PC-macOS-{universal,x86_64,
 
 <section id="faq">
   <h2>Perguntas frequentes</h2>
+  <details open><summary>É um port nativo ou um emulador?</summary><p>É um emulador dedicado a este jogo, com um aplicativo completo em volta. O aplicativo e o emulador são nativos de PC, mas o programa do jogo continua sendo código do Saturn, executado por interpretadores. Recompilá-lo para código de PC é o objetivo de longo prazo e ainda não foi feito.</p></details>
   <details><summary>Preciso da ISO e da BIOS?</summary><p>Da ISO (o seu disco), sim, mas uma única vez, para gerar o pacote local. Da BIOS, não: o port usa uma BIOS por software.</p></details>
   <details><summary>Se eu mudar a ISO de lugar, ele pede de novo?</summary><p>Não. Depois da primeira vez ele usa só o <code>dracula-x.pak</code>. Só pede o disco de novo se o pacote for apagado, estiver corrompido, for de outra versão do formato, ou se você trocar a pasta de dados.</p></details>
   <details><summary>Posso levar o jogo para outro PC?</summary><p>Instale o port no outro PC e aponte o seu disco na primeira execução. Também dá para copiar o <code>dracula-x.pak</code> para a pasta de dados da outra máquina, mas ele contém o jogo e serve só para uso seu.</p></details>

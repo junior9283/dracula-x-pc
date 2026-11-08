@@ -22,7 +22,7 @@ cat > "$app/dracula-x.desktop" <<'DESK'
 [Desktop Entry]
 Type=Application
 Name=Dracula X PC
-Comment=Port nativo de Akumajou Dracula X (Saturn); usa o seu próprio disco
+Comment=Emulador dedicado de Akumajou Dracula X (Saturn); usa o seu próprio disco
 Exec=dracula-x
 Icon=dracula-x
 Categories=Game;

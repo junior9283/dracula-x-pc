@@ -1,4 +1,4 @@
-Akumajou Dracula X - Gekka no Yasoukyoku (Sega Saturn) - port nativo para PC
+Akumajou Dracula X - Gekka no Yasoukyoku (Sega Saturn) - emulador dedicado para PC
 ============================================================================
 
 Este pacote NÃO contém nada do jogo. Você precisa do seu próprio disco

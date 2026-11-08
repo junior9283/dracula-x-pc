@@ -3,7 +3,7 @@
 Legenda: **[obs]** observado · **[inf]** inferido. Reproduzir: `python3 -I tools/analysis/chr_sheet.py data-local/disc/ITEM.CHR folha.png`.
 
 ## Escopo (decisão)
-O port **executa o código original do jogo** (recompilado); os descompressores e as rotinas de VDP1/VDP2 do jogo rodam como estão. O formato dos gráficos só é necessário para ferramentas fora do fluxo do jogo (verificação, galeria). Portanto esta tarefa documenta o que foi confirmado e **não** implementa decodificadores em C++.
+O projeto **executa o código original do jogo** (interpretado pelo núcleo; a recompilação para código de PC é a meta de longo prazo e ainda não foi feita); os descompressores e as rotinas de VDP1/VDP2 do jogo rodam como estão. O formato dos gráficos só é necessário para ferramentas fora do fluxo do jogo (verificação, galeria). Portanto esta tarefa documenta o que foi confirmado e **não** implementa decodificadores em C++.
 
 ## Confirmado [obs]
 - **`ITEM.CHR` (76 800 B) = pixel cru de 4 bpp**: linhas de 8 bytes (16 px), nibble **alto** = pixel à esquerda, **600 sprites 16×16 empilhados** (128 B cada). Validação visual: a folha gerada mostra ícones nítidos (armas, poções, comidas, armaduras, telas “DUMMY” do desenvolvedor). A paleta usada na verificação é arbitrária (o jogo usa a Color RAM).
