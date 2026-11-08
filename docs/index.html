@@ -86,7 +86,7 @@ footer { margin-top: 48px; padding: 24px 0 40px; border-top: 1px solid var(--lin
         <span class="badge">Windows 64 bits</span>
         <span class="badge">macOS: em preparação</span>
         <span class="badge">Licença MIT</span>
-        <span class="badge warn">Versão de teste (v0.1.0)</span>
+        <span class="badge warn">Versão de teste (v0.2.0)</span>
       </div>
       <div class="btns">
         <a class="btn" href="#downloads">Baixar</a>
@@ -128,13 +128,13 @@ footer { margin-top: 48px; padding: 24px 0 40px; border-top: 1px solid var(--lin
   <div class="note">Esta é uma <strong>versão de teste</strong>. O desempenho no gameplay está no limite e o som pode estalar (veja <a href="#limites">limitações</a>). Os pacotes <strong>não contêm</strong> o jogo.</div>
   <table>
     <tr><th>Sistema</th><th>Arquivo</th><th>Observação</th></tr>
-    <tr><td>Linux x86_64</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.1.0/Dracula-X-PC-x86_64.AppImage">Dracula-X-PC-x86_64.AppImage</a></td><td>Arquivo único: <code>chmod +x</code> e execute. Precisa de glibc 2.38 ou mais nova.</td></tr>
-    <tr><td>Linux x86_64</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.1.0/dracula-x-linux-x86_64.tar.gz">dracula-x-linux-x86_64.tar.gz</a></td><td>Pasta com a libSDL3 embutida.</td></tr>
-    <tr><td>Windows 64 bits</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.1.0/Dracula-X-PC-Setup-x64.exe">Dracula-X-PC-Setup-x64.exe</a></td><td>Instalador com atalhos e desinstalador. Sem assinatura digital: o SmartScreen pode avisar.</td></tr>
-    <tr><td>Windows 64 bits</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.1.0/dracula-x-windows-x64.zip">dracula-x-windows-x64.zip</a></td><td>Versão portátil.</td></tr>
+    <tr><td>Linux x86_64</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.2.0/Dracula-X-PC-x86_64.AppImage">Dracula-X-PC-x86_64.AppImage</a></td><td>Arquivo único: <code>chmod +x</code> e execute. Precisa de glibc 2.38 ou mais nova.</td></tr>
+    <tr><td>Linux x86_64</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.2.0/dracula-x-linux-x86_64.tar.gz">dracula-x-linux-x86_64.tar.gz</a></td><td>Pasta com a libSDL3 embutida.</td></tr>
+    <tr><td>Windows 64 bits</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.2.0/Dracula-X-PC-Setup-x64.exe">Dracula-X-PC-Setup-x64.exe</a></td><td>Instalador com atalhos e desinstalador. Sem assinatura digital: o SmartScreen pode avisar.</td></tr>
+    <tr><td>Windows 64 bits</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.2.0/dracula-x-windows-x64.zip">dracula-x-windows-x64.zip</a></td><td>Versão portátil.</td></tr>
     <tr><td>macOS (Intel e Apple Silicon)</td><td><span class="tag no">ainda não</span></td><td>Os scripts existem, mas nunca rodaram num Mac. Veja <a href="#compilar">Compilar</a>.</td></tr>
   </table>
-  <p>Conferir a integridade: <a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.1.0/SHA256SUMS.txt">SHA256SUMS.txt</a> · Todas as versões: <a href="https://github.com/junior9283/dracula-x-pc/releases">página de releases</a>.</p>
+  <p>Conferir a integridade: <a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.2.0/SHA256SUMS.txt">SHA256SUMS.txt</a> · Todas as versões: <a href="https://github.com/junior9283/dracula-x-pc/releases">página de releases</a>.</p>
 </section>
 
 <section id="comecar">
@@ -222,7 +222,7 @@ dracula-x --help</code></pre>
 
   <h3 id="limites">Limitações conhecidas</h3>
   <ul>
-    <li><strong>Desempenho no limite.</strong> No gameplay, o núcleo gasta cerca de 15,7 ms por quadro contra os 16,7 ms do 60 Hz, e alguns quadros chegam a 30 ms. Podem ocorrer <strong>quedas de quadro e estalos no som</strong> quando o quadro atrasa. Este é o foco do trabalho atual.</li>
+    <li><strong>Desempenho.</strong> No gameplay do estágio 1, o núcleo e o desenho do vídeo levam em média cerca de 8,8 ms por quadro (pior quadro medido: 15,3 ms) contra os 16,7 ms do 60 Hz, medido num PC de desenvolvimento. A abertura em vídeo e os menus ainda são mais pesados (cerca de 12 ms), com picos ocasionais. Em máquinas mais lentas ainda podem ocorrer quedas de quadro e estalos no som; relatos com o modelo do processador ajudam.</li>
     <li>Só foram verificadas por inteiro as primeiras fases; o resto não foi jogado.</li>
     <li>O instalador do Windows foi testado no Wine, mas não numa máquina Windows de verdade, e não é assinado digitalmente.</li>
     <li>No boot pelo BIOS real (usado só para validar o núcleo), o jogo começa cerca de 3 s antes do que num emulador de referência; a causa não foi investigada e não afeta o port, que usa a BIOS por software.</li>
@@ -308,7 +308,7 @@ tools/package/build-macos.sh   # gera dist/Dracula-X-PC-macOS-{universal,x86_64,
   <details><summary>Se eu mudar a ISO de lugar, ele pede de novo?</summary><p>Não. Depois da primeira vez ele usa só o <code>dracula-x.pak</code>. Só pede o disco de novo se o pacote for apagado, estiver corrompido, for de outra versão do formato, ou se você trocar a pasta de dados.</p></details>
   <details><summary>Posso levar o jogo para outro PC?</summary><p>Instale o port no outro PC e aponte o seu disco na primeira execução. Também dá para copiar o <code>dracula-x.pak</code> para a pasta de dados da outra máquina, mas ele contém o jogo e serve só para uso seu.</p></details>
   <details><summary>Qual versão do disco funciona?</summary><p>Somente a japonesa T-9527G v1.400, confirmada pelo SHA-256 dos setores. Outras versões ou regiões são recusadas.</p></details>
-  <details><summary>Por que o som estala às vezes?</summary><p>Hoje o núcleo tem pouca folga em relação aos 16,7 ms por quadro. Quando um quadro atrasa, a fila de áudio esvazia. Estamos otimizando o interpretador e deixando o áudio mais tolerante a atrasos.</p></details>
+  <details><summary>Por que o som estala às vezes?</summary><p>Quando um quadro demora mais que os 16,7 ms do 60 Hz, a fila de áudio esvazia. Na v0.2.0 o núcleo ficou bem mais rápido no gameplay e foi corrigido um estalo de uma amostra na interpolação do SCSP, mas máquinas mais lentas ainda podem sofrer. O próximo passo é deixar o áudio mais tolerante a atrasos.</p></details>
   <details><summary>Posso usar um save de Saturn de outro emulador?</summary><p>Os saves do jogo ficam no <code>dracula-x.bup</code>, no formato da memória interna do Saturn. A importação de saves de outros emuladores não foi testada.</p></details>
   <details><summary>Como relato um problema?</summary><p>Abra uma <a href="https://github.com/junior9283/dracula-x-pc/issues">issue</a> informando o sistema, a fase e o momento do problema. <strong>Não anexe</strong> o disco, o pacote local nem BIOS.</p></details>
 </section>
@@ -323,7 +323,7 @@ tools/package/build-macos.sh   # gera dist/Dracula-X-PC-macOS-{universal,x86_64,
 </main>
 
 <footer><div class="wrap">
-  <a href="https://github.com/junior9283/dracula-x-pc">github.com/junior9283/dracula-x-pc</a> · versão de teste v0.1.0
+  <a href="https://github.com/junior9283/dracula-x-pc">github.com/junior9283/dracula-x-pc</a> · versão de teste v0.2.0
 </div></footer>
 
 </body>
