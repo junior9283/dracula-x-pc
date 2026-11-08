@@ -83,7 +83,10 @@ void CdBlock::save(StateWriter& w) const {
     w.u32(transfer_.start);
     w.u32(transfer_.count);
     w.u32(static_cast<uint32_t>(directory_.size()));
-    for (const auto& e : directory_) { w.text(e.name); w.u32(e.lba); w.u32(e.size); w.boolean(e.is_directory); }
+    for (const auto& e : directory_) {
+        w.text(e.name); w.u32(e.lba); w.u32(e.size); w.boolean(e.is_directory);
+        w.u8(e.attributes); w.u8(e.unit_size); w.u8(e.gap_size); w.u8(e.file_number);
+    }
     w.u32(directory_first_id_);
 }
 
@@ -98,20 +101,28 @@ void CdBlock::load(StateReader& r) {
     actual_words_ = r.u32();
     subcode_cycles_ = r.u64();
     cycles_since_command_ = r.u64();
-    cd_connection_ = r.i32();
+    // Conexões e partições indexam os filtros e o buffer: valores fora da faixa de um arquivo corrompido não podem entrar.
+    const auto connection = [&r] {
+        const int v = r.i32();
+        if (v != kNoConnection && (v < 0 || v >= kFilters)) throw StateError("save state corrompido: conexão do CD block inválida");
+        return v;
+    };
+    cd_connection_ = connection();
     for (Filter& f : filters_) {
         f.range_start = r.u32(); f.range_count = r.u32(); f.mode = r.u8(); f.channel = r.u8(); f.file_number = r.u8();
-        f.masks = r.u16(); f.values = r.u16(); f.true_out = r.i32(); f.false_out = r.i32();
+        f.masks = r.u16(); f.values = r.u16(); f.true_out = connection(); f.false_out = connection();
     }
     buffer_.clear();
     for (uint32_t n = r.count(kBufferSectors); n > 0; --n) {
         BufferedSector& s = buffer_.emplace_back();
         s.fad = r.u32();
         s.partition = r.i32();
+        if (s.partition < 0 || s.partition >= kFilters) throw StateError("save state corrompido: partição do CD block inválida");
         r.raw(s.data);   // o conteúdo vai no estado: o load não depende de ler o disco
     }
     transfer_.bytes = r.blob();
     transfer_.pos = r.u64();
+    if (transfer_.pos > transfer_.bytes.size()) throw StateError("save state corrompido: posição de transferência inválida");
     transfer_.delete_on_end = r.boolean();
     transfer_.partition = r.i32();
     transfer_.start = r.u32();
@@ -123,6 +134,10 @@ void CdBlock::load(StateReader& r) {
         e.lba = r.u32();
         e.size = r.u32();
         e.is_directory = r.boolean();
+        e.attributes = r.u8();
+        e.unit_size = r.u8();
+        e.gap_size = r.u8();
+        e.file_number = r.u8();
         directory_.push_back(std::move(e));
     }
     directory_first_id_ = r.u32();

@@ -361,7 +361,7 @@ void Machine::run_frame() {
 namespace {
 
 constexpr char kStateMagic[8] = {'D', 'X', 'P', 'C', 'S', 'A', 'V', 'E'};
-constexpr uint32_t kStateVersion = 3;   // 2: DSP do SCU e autenticação do CD block; 3: DSP do SCSP
+constexpr uint32_t kStateVersion = 4;   // 2: DSP do SCU e autenticação do CD block; 3: DSP do SCSP; 4: campos XA do diretório
 constexpr uint8_t kBootedFlag = 1, kBiosRomFlag = 2;
 
 }  // namespace

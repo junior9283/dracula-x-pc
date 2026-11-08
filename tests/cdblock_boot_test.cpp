@@ -411,3 +411,56 @@ TEST_CASE("save/load do CD block preserva a autenticação do tipo 2") {
     fresh.cd.load(r);
     CHECK(fresh.cmd(0xE100)[1] == 2u);
 }
+
+TEST_CASE("save/load do CD block preserva os campos XA do diretório carregado") {
+    const std::vector<XaFile> xa = {{"X.BIN;1", 3, 4, 0x55, 7}};
+    BootRig rig("cdb-state-xa", 3000, xa);
+    rig.cmd(0x7000, 0, 0x00FF, 0xFFFF);
+    saturn::StateWriter w;
+    rig.cd.save(w);
+    const auto bytes = w.take();
+
+    BootRig fresh("cdb-state-xa2", 3000, xa);
+    saturn::StateReader r(bytes);
+    fresh.cd.load(r);
+    REQUIRE(fresh.cmd(0x7300, 0, 0, 4)[0] != kRejected);   // X.BIN: DIR, A.TXT, X.BIN
+    const std::string info = fresh.read_port(12);
+    fresh.cmd(0x0600);
+    CHECK(uint8_t(info[8]) == 3u);
+    CHECK(uint8_t(info[9]) == 4u);
+    CHECK(uint8_t(info[10]) == 7u);
+    CHECK(uint8_t(info[11]) == 0x50u);
+}
+
+TEST_CASE("load do CD block recusa conexão, partição e posição de transferência fora dos limites") {
+    BootRig rig("cdb-state-bad");
+    rig.cmd(0x4203, 0, (5 << 8) | 0x07, 0);   // um filtro com saída verdadeira 5
+    rig.filter_outputs(5, 9, 7);
+    rig.feed(5, 1);                            // um setor na partição 9
+    saturn::StateWriter w;
+    rig.cd.save(w);
+    const std::vector<uint8_t> good = w.take();
+
+    const auto load = [&](const std::vector<uint8_t>& bytes) {
+        BootRig target("cdb-state-bad2");
+        saturn::StateReader r(bytes);
+        target.cd.load(r);
+    };
+    CHECK_NOTHROW(load(good));
+
+    // Campos fixos do início: hirq(2) mask(2) cr(4x2) status(1) auth(1) fad(4) play(4) words(4) subcode(8) since(8) → conexão (i32).
+    constexpr size_t kConnectionOffset = 2 + 2 + 8 + 1 + 1 + 4 + 4 + 4 + 8 + 8;
+    const auto with_i32 = [&](size_t offset, int32_t value) {
+        saturn::StateWriter field;
+        field.i32(value);
+        const auto raw = field.take();
+        std::vector<uint8_t> bytes = good;
+        std::copy(raw.begin(), raw.end(), bytes.begin() + static_cast<std::ptrdiff_t>(offset));
+        return bytes;
+    };
+    CHECK_NOTHROW(load(with_i32(kConnectionOffset, 0xFF)));             // sem conexão
+    CHECK_NOTHROW(load(with_i32(kConnectionOffset, 23)));
+    CHECK_THROWS_AS(load(with_i32(kConnectionOffset, 24)), saturn::StateError);
+    CHECK_THROWS_AS(load(with_i32(kConnectionOffset, -1)), saturn::StateError);
+    CHECK_THROWS_AS(load(with_i32(kConnectionOffset, 0x7FFFFFFF)), saturn::StateError);
+}

@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "saturn/scu.hpp"
+#include "saturn/scu_dsp.hpp"
 
 using saturn::Scu;
 
@@ -135,4 +136,36 @@ TEST_CASE("DSP do SCU: estado salvo e carregado continua a execução igual") {
         for (int i = 0; i < 100 && rig->scu.dsp().running(); ++i) rig->scu.advance(64);
     for (uint8_t i = 0; i < 64; ++i) CHECK(a.data(64 + i) == b.data(64 + i));
     CHECK_FALSE(b.scu.dsp().running());
+}
+
+TEST_CASE("DSP do SCU: estado com CT ou contagem de DMA de programa fora dos limites é recusado ao carregar") {
+    saturn::Bus bus;
+    saturn::ScuDsp dsp(bus);
+    saturn::StateWriter w;
+    dsp.save(w);
+    const std::vector<uint8_t> good = w.take();
+
+    const auto load = [&](const std::vector<uint8_t>& bytes) {
+        saturn::ScuDsp target(bus);
+        saturn::StateReader r(bytes);
+        target.load(r);
+    };
+    // Layout: 256 palavras de programa + 4 bancos de 64 palavras, depois CT[4] (bytes) e, no fim, a contagem do DMA de programa (u32).
+    constexpr size_t kCtOffset = 4 * (256 + 4 * 64);
+    const auto patched = [&](size_t offset, auto write) {
+        saturn::StateWriter field;
+        write(field);
+        const std::vector<uint8_t> raw = field.take();
+        std::vector<uint8_t> bytes = good;
+        std::copy(raw.begin(), raw.end(), bytes.begin() + static_cast<std::ptrdiff_t>(offset));
+        return bytes;
+    };
+
+    CHECK_NOTHROW(load(good));
+    CHECK_NOTHROW(load(patched(kCtOffset, [](auto& f) { f.u8(63); })));
+    CHECK_THROWS_AS(load(patched(kCtOffset, [](auto& f) { f.u8(64); })), saturn::StateError);
+    CHECK_THROWS_AS(load(patched(kCtOffset + 3, [](auto& f) { f.u8(0xFF); })), saturn::StateError);
+    CHECK_NOTHROW(load(patched(good.size() - 4, [](auto& f) { f.u32(256); })));
+    CHECK_THROWS_AS(load(patched(good.size() - 4, [](auto& f) { f.u32(257); })), saturn::StateError);
+    CHECK_THROWS_AS(load(patched(good.size() - 4, [](auto& f) { f.u32(0xFFFFFFFF); })), saturn::StateError);
 }

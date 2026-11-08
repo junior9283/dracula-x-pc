@@ -16,9 +16,10 @@
 - Menu sobreposto ao jogo (`src/frontend/menu.*`), aberto com Esc ou Back/Guide; o núcleo fica pausado enquanto ele está aberto.
   Páginas: Save states, Vídeo (janela/tela cheia, escala inteira, proporção, filtro, scanlines, vsync), Áudio (volume, mudo,
   latência), Galeria da trilha sonora, Controles (remapeamento de teclado e controle, zona morta) e Sair. Tudo salvo em `dracula-x.ini`.
-- Save states: `states/slotN.dxs` na pasta de dados (gravação atômica). O formato tem versão (`Machine::kStateVersion`, hoje **3**,
-  que acrescentou o DSP do SCU, o estado novo do SMPC e a autenticação do CD block na 2 e o DSP do SCSP na 3); estados de versão anterior são recusados com
-  mensagem, sem derrubar o jogo.
+- Save states: `states/slotN.dxs` na pasta de dados (gravação atômica). O formato tem versão (`Machine::kStateVersion`, hoje **4**,
+  que acrescentou o DSP do SCU, o estado novo do SMPC e a autenticação do CD block na 2 o DSP do SCSP na 3 e os campos XA do diretório do CD block na 4); estados de versão anterior são recusados com
+  mensagem, sem derrubar o jogo. Na carga, índices lidos do arquivo (CT do DSP do SCU, conexões e partições do CD block, posição
+  de transferência) são validados: um estado corrompido lança `StateError` em vez de escrever fora de um array.
 - Galeria (`src/frontend/gallery.*`, `scenes.*`, `gallery_view.cpp`): lista as faixas `SD/SDxx.PCM` lidas do pacote local,
   decodifica o DVI/IMA ADPCM em streaming com laço (`audio/dvi.*`) e mostra um cenário ilustrativo com espectro. O local de uso de
   cada faixa vem da tabela de estágios inferida (`03-tabela-musica.md`); os cenários são arte própria, não imagens do jogo.

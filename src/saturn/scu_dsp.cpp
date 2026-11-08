@@ -343,7 +343,10 @@ void ScuDsp::load(StateReader& r) {
     for (uint32_t& v : program_) v = r.u32();
     for (auto& bank : data_)
         for (uint32_t& v : bank) v = r.u32();
-    for (uint8_t& v : ct_) v = r.u8();
+    for (uint8_t& v : ct_) {   // índice direto nas RAMs de dados: um valor fora de 0..63 sairia do array
+        v = r.u8();
+        if (v >= 64) throw StateError("save state corrompido: CT do DSP inválido");
+    }
     ac_ = r.u64();
     p_ = r.u64();
     for (uint32_t* v : {&rx_, &ry_, &ra0_, &wa0_, &next_instr_}) *v = r.u32();
@@ -353,6 +356,7 @@ void ScuDsp::load(StateReader& r) {
     credit_ = static_cast<int32_t>(r.u32());
     for (uint32_t& v : program_dma_) v = r.u32();
     program_dma_count_ = r.u32();
+    if (program_dma_count_ > program_dma_.size()) throw StateError("save state corrompido: contagem de DMA de programa inválida");
 }
 
 }  // namespace saturn
