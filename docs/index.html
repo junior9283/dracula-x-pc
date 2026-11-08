@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dracula X PC — port nativo de Akumajou Dracula X (Sega Saturn)</title>
+<meta name="description" content="Port nativo para Linux, Windows e macOS de Akumajou Dracula X – Gekka no Yasoukyoku (Sega Saturn). Sem dados do jogo: use o seu próprio disco.">
+<link rel="icon" href="assets/icon.png">
+<style>
+:root {
+  --bg: #fbf9f4; --panel: #ffffff; --ink: #1d1a26; --muted: #5d5870; --line: #e3dfd3;
+  --accent: #8d2b3c; --accent-ink: #ffffff; --gold: #9a6b00; --code: #f1eee5; --ok: #1f7a4a; --warn: #a15c00;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14101f; --panel: #1c172c; --ink: #ece7f5; --muted: #a59fb8; --line: #322b49;
+    --accent: #e0566d; --accent-ink: #1a0f14; --gold: #e7c25a; --code: #251f39; --ok: #5fd08e; --warn: #f0b457;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: var(--accent); text-underline-offset: 2px; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em; }
+code { background: var(--code); padding: .1em .35em; border-radius: 4px; }
+pre { background: var(--code); padding: 14px 16px; border-radius: 8px; overflow-x: auto; border: 1px solid var(--line); line-height: 1.5; }
+pre code { background: none; padding: 0; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
+header.hero { background: linear-gradient(180deg, #1a1230 0%, #2b1830 100%); color: #f4eefc; padding: 56px 0 44px; border-bottom: 3px solid var(--accent); }
+.hero .wrap { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; }
+.hero img.logo { width: 112px; height: 112px; border-radius: 22px; box-shadow: 0 6px 24px rgba(0,0,0,.45); }
+.hero h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 4vw, 2.6rem); line-height: 1.15; }
+.hero p { margin: 0 0 14px; max-width: 640px; color: #d9d0ea; }
+.badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+.badge { font-size: .78rem; padding: 3px 10px; border-radius: 99px; border: 1px solid #ffffff44; color: #f4eefc; background: #ffffff14; }
+.badge.warn { border-color: #f0b45788; color: #ffd9a0; }
+.btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn { display: inline-block; padding: 10px 18px; border-radius: 8px; font-weight: 600; text-decoration: none; background: var(--accent); color: var(--accent-ink); }
+.btn.alt { background: transparent; color: #f4eefc; border: 1px solid #ffffff66; }
+nav.toc { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+nav.toc .wrap { display: flex; gap: 4px 16px; flex-wrap: wrap; padding: 8px 20px; font-size: .9rem; }
+nav.toc a { text-decoration: none; color: var(--muted); }
+nav.toc a:hover { color: var(--accent); }
+section { padding: 36px 0 8px; }
+h2 { font-size: 1.55rem; margin: 0 0 14px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1.1rem; margin: 22px 0 8px; color: var(--gold); }
+.note { border-left: 4px solid var(--warn); background: var(--panel); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+.note.ok { border-left-color: var(--ok); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin: 16px 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.card h3 { margin-top: 0; }
+.card p { margin: 6px 0; color: var(--muted); font-size: .95rem; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: .95rem; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: var(--code); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+.tag { font-size: .75rem; padding: 1px 8px; border-radius: 99px; white-space: nowrap; }
+.tag.ok { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+.tag.part { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.tag.no { background: color-mix(in srgb, var(--muted) 22%, transparent); color: var(--muted); }
+.shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin: 16px 0; }
+.shots figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.shots img { width: 100%; height: auto; image-rendering: pixelated; border-radius: 6px; background: #000; }
+.shots figcaption { color: var(--muted); font-size: .88rem; margin-top: 6px; }
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; margin: 8px 0; }
+summary { cursor: pointer; font-weight: 600; }
+details p { margin: 8px 0 4px; }
+kbd { background: var(--code); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 6px; font-size: .88em; }
+footer { margin-top: 48px; padding: 24px 0 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; }
+.diagram { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0; }
+.diagram span.box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font-size: .9rem; }
+.diagram span.arrow { color: var(--accent); font-weight: 700; }
+@media (max-width: 560px) { .hero img.logo { width: 80px; height: 80px; } }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <img class="logo" src="assets/icon.png" alt="Ícone do projeto: lua crescente sobre um castelo">
+    <div>
+      <h1>Dracula X PC</h1>
+      <p>Port nativo para PC de <strong>Akumajou Dracula X – Gekka no Yasoukyoku</strong> (Sega Saturn, T-9527G v1.400). Roda no Linux e no Windows a partir da <strong>sua própria imagem de disco</strong>, sem BIOS e sem emulador de terceiros.</p>
+      <div class="badges">
+        <span class="badge">Linux x86_64</span>
+        <span class="badge">Windows 64 bits</span>
+        <span class="badge">macOS: em preparação</span>
+        <span class="badge">Licença MIT</span>
+        <span class="badge warn">Versão de teste (v0.1.0)</span>
+      </div>
+      <div class="btns">
+        <a class="btn" href="#downloads">Baixar</a>
+        <a class="btn alt" href="https://github.com/junior9283/dracula-x-pc">Código no GitHub</a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#visao">Visão geral</a><a href="#downloads">Downloads</a><a href="#comecar">Primeiros passos</a><a href="#controles">Controles e menu</a>
+  <a href="#estado">Estado do projeto</a><a href="#tecnico">Como funciona</a><a href="#fidelidade">Fidelidade e testes</a>
+  <a href="#compilar">Compilar</a><a href="#faq">Perguntas frequentes</a><a href="#legal">Legal</a>
+</div></nav>
+
+<main class="wrap">
+
+<section id="visao">
+  <h2>Visão geral</h2>
+  <p>O projeto executa o <strong>código original do jogo</strong> num núcleo escrito do zero em C++20 (dois SH-2, SCU com DSP, SMPC, bloco de CD, VDP1, VDP2, 68000 e SCSP) e o envolve num executável moderno: janela com SDL3, som, teclado e controles, menu próprio, save states e uma galeria da trilha sonora. Não é um emulador genérico de Saturn: ele só precisa fazer este jogo funcionar, e por isso dispensa a BIOS do console.</p>
+  <div class="cards">
+    <div class="card"><h3>Nada do jogo no repositório</h3><p>O código e as ferramentas são originais. O jogo vem do <em>seu</em> disco, convertido localmente num pacote (<code>dracula-x.pak</code>) que nunca sai da sua máquina.</p></div>
+    <div class="card"><h3>Sem BIOS</h3><p>Uma BIOS por software, escrita para o projeto, substitui a do console. Só é preciso a imagem do disco, e apenas uma vez.</p></div>
+    <div class="card"><h3>Extras do port</h3><p>Menu dentro do jogo, 8 slots de save state, remapeamento de teclado e controle, escala inteira, filtros e a galeria da trilha sonora com 49 faixas.</p></div>
+  </div>
+
+  <h3>Fluxo</h3>
+  <div class="diagram">
+    <span class="box">Seu disco (.cue/.bin)</span><span class="arrow">→</span>
+    <span class="box">Conferência SHA-256 (T-9527G v1.400)</span><span class="arrow">→</span>
+    <span class="box">dracula-x.pak (local, ~400 MB)</span><span class="arrow">→</span>
+    <span class="box">Núcleo + SDL3: janela, som, controles</span>
+  </div>
+</section>
+
+<section id="downloads">
+  <h2>Downloads</h2>
+  <div class="note">Esta é uma <strong>versão de teste</strong>. O desempenho no gameplay está no limite e o som pode estalar (veja <a href="#limites">limitações</a>). Os pacotes <strong>não contêm</strong> o jogo.</div>
+  <table>
+    <tr><th>Sistema</th><th>Arquivo</th><th>Observação</th></tr>
+    <tr><td>Linux x86_64</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.1.0/Dracula-X-PC-x86_64.AppImage">Dracula-X-PC-x86_64.AppImage</a></td><td>Arquivo único: <code>chmod +x</code> e execute. Precisa de glibc 2.38 ou mais nova.</td></tr>
+    <tr><td>Linux x86_64</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.1.0/dracula-x-linux-x86_64.tar.gz">dracula-x-linux-x86_64.tar.gz</a></td><td>Pasta com a libSDL3 embutida.</td></tr>
+    <tr><td>Windows 64 bits</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.1.0/Dracula-X-PC-Setup-x64.exe">Dracula-X-PC-Setup-x64.exe</a></td><td>Instalador com atalhos e desinstalador. Sem assinatura digital: o SmartScreen pode avisar.</td></tr>
+    <tr><td>Windows 64 bits</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.1.0/dracula-x-windows-x64.zip">dracula-x-windows-x64.zip</a></td><td>Versão portátil.</td></tr>
+    <tr><td>macOS (Intel e Apple Silicon)</td><td><span class="tag no">ainda não</span></td><td>Os scripts existem, mas nunca rodaram num Mac. Veja <a href="#compilar">Compilar</a>.</td></tr>
+  </table>
+  <p>Conferir a integridade: <a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.1.0/SHA256SUMS.txt">SHA256SUMS.txt</a> · Todas as versões: <a href="https://github.com/junior9283/dracula-x-pc/releases">página de releases</a>.</p>
+</section>
+
+<section id="comecar">
+  <h2>Primeiros passos</h2>
+  <h3>O que você precisa</h3>
+  <ul>
+    <li>O <strong>seu próprio disco</strong> de <em>Akumajou Dracula X – Gekka no Yasoukyoku</em> (Japão, T-9527G, <strong>versão 1.400</strong>), como imagem <code>.cue</code> + <code>.bin</code>.</li>
+    <li>Cerca de 400 MB livres para o pacote local.</li>
+    <li><strong>Não</strong> precisa de BIOS do Saturn.</li>
+  </ul>
+  <h3>Primeira execução</h3>
+  <ol>
+    <li>Abra o <code>dracula-x</code> (no Windows, <code>dracula-x.exe</code>).</li>
+    <li>Uma janela do sistema pede o arquivo <code>.cue</code> do disco. O port confere a versão pelo SHA-256 dos setores; qualquer imagem de outra versão ou incompleta é recusada, sem gerar nada.</li>
+    <li>Ele cria o <code>dracula-x.pak</code> em poucos segundos. A partir daí o disco <strong>não é mais necessário</strong>, e mover ou apagar a imagem não afeta nada.</li>
+  </ol>
+  <p>Pela linha de comando:</p>
+<pre><code>dracula-x --install "caminho/do/disco.cue"     # só gera o pacote local
+dracula-x "caminho/do/disco.cue"                 # roda direto do disco, sem instalar
+dracula-x --data-dir uma/pasta                   # escolhe onde ficam pacote, saves e opções
+dracula-x --help</code></pre>
+  <h3>Onde ficam os arquivos</h3>
+  <table>
+    <tr><th>Sistema</th><th>Pasta de dados</th></tr>
+    <tr><td>Linux</td><td><code>~/.local/share/dracula-x-pc/dracula-x/</code></td></tr>
+    <tr><td>Windows</td><td><code>%APPDATA%\dracula-x-pc\dracula-x\</code></td></tr>
+    <tr><td>macOS</td><td><code>~/Library/Application Support/dracula-x-pc/dracula-x/</code></td></tr>
+  </table>
+  <p>Ali ficam o <code>dracula-x.pak</code>, os saves do jogo (<code>dracula-x.bup</code>), os save states, as capturas e as opções (<code>dracula-x.ini</code>). <strong>Modo portátil:</strong> se houver um <code>dracula-x.pak</code> ao lado do executável, ele é usado e os saves ficam ali.</p>
+</section>
+
+<section id="controles">
+  <h2>Controles, menu e galeria</h2>
+  <h3>Teclado padrão</h3>
+  <table>
+    <tr><th>Saturn</th><th>Tecla</th></tr>
+    <tr><td>Direcional</td><td>Setas</td></tr>
+    <tr><td>Start</td><td><kbd>Enter</kbd></td></tr>
+    <tr><td>A / B / C</td><td><kbd>Z</kbd> / <kbd>X</kbd> / <kbd>C</kbd></td></tr>
+    <tr><td>X / Y / Z</td><td><kbd>A</kbd> / <kbd>S</kbd> / <kbd>D</kbd></td></tr>
+    <tr><td>L / R</td><td><kbd>Q</kbd> / <kbd>W</kbd></td></tr>
+  </table>
+  <p>Controles de videogame (Xbox, PlayStation e similares) são reconhecidos ao conectar. Tudo pode ser remapeado no menu.</p>
+  <h3>Atalhos</h3>
+  <table>
+    <tr><td><kbd>Esc</kbd> (ou Back/Guide no controle)</td><td>abre o menu do port, que pausa o jogo</td></tr>
+    <tr><td><kbd>F5</kbd> / <kbd>F7</kbd></td><td>salva / carrega o save state do slot atual</td></tr>
+    <tr><td><kbd>F6</kbd> / <kbd>F8</kbd></td><td>slot anterior / próximo (são 8)</td></tr>
+    <tr><td><kbd>F11</kbd></td><td>tela cheia</td></tr>
+    <tr><td><kbd>F12</kbd></td><td>captura de tela (na pasta de dados)</td></tr>
+  </table>
+  <h3>O menu do port</h3>
+  <p>Save states, vídeo (janela ou tela cheia, escala inteira, proporção original ou 4:3, filtro nítido ou suave, scanlines, vsync), áudio (volume, mudo, latência), remapeamento de teclado e controle, zona morta do analógico e a galeria da trilha sonora.</p>
+  <div class="shots">
+    <figure><img src="assets/menu-video.png" alt="Menu de vídeo" loading="lazy"><figcaption>Menu de vídeo.</figcaption></figure>
+    <figure><img src="assets/menu-controles.png" alt="Menu de controles" loading="lazy"><figcaption>Remapeamento de teclado e controle.</figcaption></figure>
+    <figure><img src="assets/menu-states.png" alt="Menu de save states" loading="lazy"><figcaption>Oito slots de save state.</figcaption></figure>
+  </div>
+  <h3>Galeria da trilha sonora</h3>
+  <p>Toca as 49 faixas de música do jogo, lidas do seu pacote local (formato DVI/IMA ADPCM, com o laço original), com um cenário animado e um espectro. Para as faixas que o jogo usa em estágios, mostra o arquivo de fase de origem. Os cenários são arte original do projeto, e não imagens do jogo.</p>
+  <div class="shots">
+    <figure><img src="assets/galeria-1.png" alt="Galeria da trilha sonora, tema castelo" loading="lazy"><figcaption>Faixa 01, tema “Castelo”.</figcaption></figure>
+    <figure><img src="assets/galeria-2.png" alt="Galeria da trilha sonora, faixa 10" loading="lazy"><figcaption>Faixa 10.</figcaption></figure>
+    <figure><img src="assets/galeria-3.png" alt="Galeria da trilha sonora, tema castelo invertido" loading="lazy"><figcaption>Faixa 18, tema “Castelo invertido”.</figcaption></figure>
+  </div>
+</section>
+
+<section id="estado">
+  <h2>Estado do projeto</h2>
+  <div class="note ok">Do título ao gameplay do <strong>estágio 1</strong> funciona, com Richter andando, subindo escadas, usando o chicote e pulando, com música e efeitos. Dezenas de outras fases carregam e desenham. <strong>Ninguém jogou o jogo inteiro</strong>: chefes e áreas avançadas ainda podem ter defeitos.</div>
+  <table>
+    <tr><th>Componente</th><th>Situação</th></tr>
+    <tr><td>SH-2 (mestre e escravo)</td><td><span class="tag ok">completo</span> interpretador, DMAC, FRT, divisão, cache, interrupções</td></tr>
+    <tr><td>SCU</td><td><span class="tag ok">completo</span> DMA direto e indireto, interrupções, <strong>DSP</strong> (VLIW de 48 bits)</td></tr>
+    <tr><td>SMPC</td><td><span class="tag ok">completo</span> comandos usados pelo jogo e pelo BIOS, INTBACK, troca de relógio</td></tr>
+    <tr><td>Bloco de CD</td><td><span class="tag ok">completo</span> comandos, filtros e partições, ISO 9660 com extensão XA, autenticação</td></tr>
+    <tr><td>VDP1</td><td><span class="tag ok">completo</span> sprites, polígonos, linhas, Gouraud, malha, meia-transparência, clipping</td></tr>
+    <tr><td>VDP2</td><td><span class="tag part">quase</span> NBG0–3, rolagem por linha, zoom, bitmap, prioridades, cálculo de cor, janelas; RBG0/RBG1 e janelas de linha e de sprite só com testes sintéticos (o jogo não os usa); falta mosaico e janela de cálculo de cor</td></tr>
+    <tr><td>68000 + SCSP</td><td><span class="tag part">quase</span> 68000 completo, síntese dos 32 slots, envelope, pan e DSP; efeitos de FM e LFO não são usados pelo jogo</td></tr>
+    <tr><td>BIOS</td><td><span class="tag ok">por software</span> o BIOS real só é usado em validação local, nunca distribuído</td></tr>
+    <tr><td>Frontend</td><td><span class="tag ok">completo</span> menu, save states, remapeamento, galeria, pacote local</td></tr>
+    <tr><td>Recompilação estática (AOT)</td><td><span class="tag no">não feita</span> evolução futura: hoje o código é interpretado</td></tr>
+    <tr><td>macOS</td><td><span class="tag no">não testado</span> scripts prontos, sem Mac para validar</td></tr>
+  </table>
+
+  <h3 id="limites">Limitações conhecidas</h3>
+  <ul>
+    <li><strong>Desempenho no limite.</strong> No gameplay, o núcleo gasta cerca de 15,7 ms por quadro contra os 16,7 ms do 60 Hz, e alguns quadros chegam a 30 ms. Podem ocorrer <strong>quedas de quadro e estalos no som</strong> quando o quadro atrasa. Este é o foco do trabalho atual.</li>
+    <li>Só foram verificadas por inteiro as primeiras fases; o resto não foi jogado.</li>
+    <li>O instalador do Windows foi testado no Wine, mas não numa máquina Windows de verdade, e não é assinado digitalmente.</li>
+    <li>No boot pelo BIOS real (usado só para validar o núcleo), o jogo começa cerca de 3 s antes do que num emulador de referência; a causa não foi investigada e não afeta o port, que usa a BIOS por software.</li>
+  </ul>
+</section>
+
+<section id="tecnico">
+  <h2>Como funciona</h2>
+  <p>O código está organizado em módulos pequenos, cada um com testes:</p>
+  <table>
+    <tr><th>Pasta</th><th>Conteúdo</th></tr>
+    <tr><td><code>src/saturnfs</code></td><td>leitor de imagem de disco (.cue/.bin), ISO 9660, SHA-256, pacote local <code>DXPCPAK1</code></td></tr>
+    <tr><td><code>src/sh2</code></td><td>CPU SH-2: instruções, cache, controlador de interrupções, DMAC, FRT, divisor</td></tr>
+    <tr><td><code>src/saturn</code></td><td>máquina: barramento, SCU e DSP, SMPC, bloco de CD, BIOS por software, temporização NTSC, save states</td></tr>
+    <tr><td><code>src/video</code></td><td>renderizador em software do VDP1 e do VDP2, escrita de PNG</td></tr>
+    <tr><td><code>src/audio</code></td><td>68000, SCSP (síntese e DSP), decodificador DVI/IMA ADPCM, WAV</td></tr>
+    <tr><td><code>src/frontend</code></td><td>executável SDL3, menu, entrada, configuração, galeria e cenários</td></tr>
+    <tr><td><code>src/tools</code></td><td>ferramentas de linha de comando: extração, catálogo, exportação da música, <code>dxpc-run</code> (execução sem janela para testes e diagnóstico)</td></tr>
+  </table>
+  <h3>Decisões de projeto</h3>
+  <ul>
+    <li><strong>Determinismo.</strong> Relógio de tempo real fixo e temporização por ciclos: o mesmo roteiro de entrada produz sempre a mesma imagem e o mesmo áudio, bit a bit. Isso permite testes por hash.</li>
+    <li><strong>Pacote local.</strong> O disco é lido uma vez e gravado num formato próprio com cabeçalho e SHA-256, em escrita atômica.</li>
+    <li><strong>Save states versionados.</strong> Estados de versões antigas são recusados com mensagem, e os índices lidos do arquivo (conexões do bloco de CD, registradores do DSP) são validados na carga.</li>
+    <li><strong>Temporização NTSC.</strong> Linhas, VBlank e HBlank seguem o modo de vídeo ativo (TVMD), que também ajusta o relógio das amostras do SCSP.</li>
+  </ul>
+  <p>Documentação técnica detalhada, com o que foi observado e o que foi inferido:
+    <a href="https://github.com/junior9283/dracula-x-pc/blob/main/docs/analysis/00-boot-e-memoria.md">boot e memória</a> ·
+    <a href="https://github.com/junior9283/dracula-x-pc/blob/main/docs/analysis/01-overlays.md">overlays</a> ·
+    <a href="https://github.com/junior9283/dracula-x-pc/blob/main/docs/analysis/02-musica-dvi.md">música DVI</a> ·
+    <a href="https://github.com/junior9283/dracula-x-pc/blob/main/docs/analysis/03-tabela-musica.md">tabela de músicas</a> ·
+    <a href="https://github.com/junior9283/dracula-x-pc/blob/main/docs/analysis/04-graficos.md">gráficos</a> ·
+    <a href="https://github.com/junior9283/dracula-x-pc/blob/main/docs/analysis/05-som-e-midia.md">som e mídia</a> ·
+    <a href="https://github.com/junior9283/dracula-x-pc/blob/main/docs/analysis/06-mapa-do-jogo.md">mapa do jogo</a> ·
+    <a href="https://github.com/junior9283/dracula-x-pc/blob/main/docs/analysis/07-boot-real.md">boot e BIOS real</a> ·
+    <a href="https://github.com/junior9283/dracula-x-pc/blob/main/docs/analysis/08-port-pc.md">executável, áudio e distribuição</a>.</p>
+</section>
+
+<section id="fidelidade">
+  <h2>Fidelidade e testes</h2>
+  <ul>
+    <li><strong>380 casos de teste</strong> automatizados (Catch2), cobrindo CPU, barramento, SCU e DSP, SMPC, bloco de CD, vídeo, áudio, save states e o frontend. A suíte passa também compilando com o <code>clang</code>.</li>
+    <li><strong>Áudio do filme de abertura da Konami:</strong> correlação de 0,999998 com a gravação de um emulador de referência, rodando o BIOS real.</li>
+    <li><strong>Música do estágio 1:</strong> correlação de 0,95 a 0,99 com a faixa original decodificada do disco; o resíduo é compatível com os efeitos sonoros mixados por cima.</li>
+    <li><strong>Boot pelo BIOS real</strong> (validação local, nunca distribuído): sequência completa do BIOS até a tela de título, que valida o núcleo contra o hardware documentado.</li>
+    <li><strong>Censo de 56 fases</strong>: registro de todos os recursos de vídeo que o jogo liga em cada uma, para saber o que ainda falta de fato.</li>
+  </ul>
+</section>
+
+<section id="compilar">
+  <h2>Compilar do código-fonte</h2>
+  <p>Precisa de um compilador C++20 (GCC, Clang ou MSVC/MinGW), CMake 3.24+ e Ninja. O SDL3 só é necessário para o executável com janela; as ferramentas e os testes compilam sem ele.</p>
+  <h3>Linux</h3>
+<pre><code>git clone https://github.com/junior9283/dracula-x-pc && cd dracula-x-pc
+cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build-release
+build-release/tests/tests          # suíte de testes
+build-release/dracula-x            # o jogo (precisa do SDL3)
+
+tools/package/build-linux.sh       # tar.gz com a libSDL3 embutida
+tools/package/build-appimage.sh    # AppImage</code></pre>
+  <h3>Windows (cross-compilação a partir do Linux, com mingw-w64)</h3>
+<pre><code>tools/package/build-windows.sh            # zip portátil
+tools/package/build-windows-installer.sh  # instalador (precisa do makensis)</code></pre>
+  <h3>macOS (Intel e Apple Silicon)</h3>
+<pre><code>brew install cmake ninja
+tools/package/build-macos.sh   # gera dist/Dracula-X-PC-macOS-{universal,x86_64,arm64}.dmg</code></pre>
+  <p>Ou, sem ter um Mac, use o fluxo <code>.github/workflows/macos.yml</code> no GitHub Actions. <strong>Esses scripts nunca foram executados num Mac</strong>; relatos de problemas são bem-vindos.</p>
+  <h3>Ferramentas de linha de comando</h3>
+  <table>
+    <tr><td><code>dxpc-extract &lt;cue&gt; &lt;pasta&gt;</code></td><td>extrai os arquivos do disco e gera um manifesto</td></tr>
+    <tr><td><code>dxpc-catalog &lt;cue&gt;</code></td><td>lista e classifica os arquivos por tipo</td></tr>
+    <tr><td><code>dxpc-overlays &lt;cue&gt;</code></td><td>endereço de carga dos overlays</td></tr>
+    <tr><td><code>dxpc-music-export &lt;cue&gt; &lt;pasta&gt;</code></td><td>decodifica as 49 faixas de música para <code>.wav</code></td></tr>
+    <tr><td><code>dxpc-run &lt;cue&gt; …</code></td><td>executa o jogo sem janela, com capturas, gravação do áudio, roteiro de entrada, perfis de tempo e diagnósticos</td></tr>
+  </table>
+</section>
+
+<section id="faq">
+  <h2>Perguntas frequentes</h2>
+  <details><summary>Preciso da ISO e da BIOS?</summary><p>Da ISO (o seu disco), sim, mas uma única vez, para gerar o pacote local. Da BIOS, não: o port usa uma BIOS por software.</p></details>
+  <details><summary>Se eu mudar a ISO de lugar, ele pede de novo?</summary><p>Não. Depois da primeira vez ele usa só o <code>dracula-x.pak</code>. Só pede o disco de novo se o pacote for apagado, estiver corrompido, for de outra versão do formato, ou se você trocar a pasta de dados.</p></details>
+  <details><summary>Posso levar o jogo para outro PC?</summary><p>Instale o port no outro PC e aponte o seu disco na primeira execução. Também dá para copiar o <code>dracula-x.pak</code> para a pasta de dados da outra máquina, mas ele contém o jogo e serve só para uso seu.</p></details>
+  <details><summary>Qual versão do disco funciona?</summary><p>Somente a japonesa T-9527G v1.400, confirmada pelo SHA-256 dos setores. Outras versões ou regiões são recusadas.</p></details>
+  <details><summary>Por que o som estala às vezes?</summary><p>Hoje o núcleo tem pouca folga em relação aos 16,7 ms por quadro. Quando um quadro atrasa, a fila de áudio esvazia. Estamos otimizando o interpretador e deixando o áudio mais tolerante a atrasos.</p></details>
+  <details><summary>Posso usar um save de Saturn de outro emulador?</summary><p>Os saves do jogo ficam no <code>dracula-x.bup</code>, no formato da memória interna do Saturn. A importação de saves de outros emuladores não foi testada.</p></details>
+  <details><summary>Como relato um problema?</summary><p>Abra uma <a href="https://github.com/junior9283/dracula-x-pc/issues">issue</a> informando o sistema, a fase e o momento do problema. <strong>Não anexe</strong> o disco, o pacote local nem BIOS.</p></details>
+</section>
+
+<section id="legal">
+  <h2>Legal e licença</h2>
+  <p>Projeto independente e sem fins comerciais, <strong>não afiliado nem endossado</strong> pela Konami nem pela Sega. <em>Castlevania</em>, <em>Akumajou Dracula X</em>, <em>Sega Saturn</em> e demais nomes são marcas de seus donos.</p>
+  <p>O repositório e os pacotes <strong>não incluem</strong> o jogo, a imagem do disco, o pacote gerado a partir dele nem nenhuma BIOS. É preciso ter o seu próprio disco e usá-lo conforme a lei do seu país. O código foi escrito a partir de documentação pública e da observação do comportamento do jogo, sem copiar código de outros emuladores. Os cenários e o ícone da galeria são arte original.</p>
+  <p>O código é distribuído sob a <a href="https://github.com/junior9283/dracula-x-pc/blob/main/LICENSE">licença MIT</a>. O executável usa a biblioteca <a href="https://libsdl.org">SDL3</a> (licença zlib).</p>
+</section>
+
+</main>
+
+<footer><div class="wrap">
+  <a href="https://github.com/junior9283/dracula-x-pc">github.com/junior9283/dracula-x-pc</a> · versão de teste v0.1.0
+</div></footer>
+
+</body>
+</html>

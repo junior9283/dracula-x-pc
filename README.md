@@ -7,6 +7,8 @@ Este repositório contém apenas código e ferramentas originais. **Nenhum dado 
 
 **Aviso legal.** Projeto independente e sem fins comerciais, não afiliado nem endossado pela Konami nem pela Sega. *Castlevania*, *Akumajou Dracula X*, *Sega Saturn* e demais nomes são marcas de seus donos. O repositório e os pacotes não incluem o jogo, a imagem do disco, o pacote gerado a partir dele nem nenhuma BIOS: é preciso ter o seu próprio disco (T-9527G v1.400) e usá-lo conforme a lei do seu país. A BIOS é substituída por uma implementação própria; o código foi escrito a partir de documentação pública e de observação do comportamento do jogo, sem copiar código de outros emuladores. Licença do código: MIT (`LICENSE`).
 
+**Página do projeto:** https://junior9283.github.io/dracula-x-pc/ · **Downloads:** [releases](https://github.com/junior9283/dracula-x-pc/releases)
+
 Design: `docs/superpowers/specs/`. Plano atual: `docs/superpowers/plans/`.
 
 ## Jogar
