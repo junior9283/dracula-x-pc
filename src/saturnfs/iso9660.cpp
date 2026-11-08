@@ -11,7 +11,7 @@ namespace {
 constexpr uint32_t kPrimaryDescriptorLba = 16;
 constexpr size_t kRootRecordOffset = 156;
 constexpr size_t kMinRecordLength = 34;
-constexpr size_t kNameLengthOffset = 32, kNameOffset = 33, kFlagsOffset = 25;
+constexpr size_t kNameLengthOffset = 32, kNameOffset = 33, kFlagsOffset = 25, kUnitSizeOffset = 26, kGapSizeOffset = 27;
 constexpr uint8_t kDirectoryFlag = 2;
 
 uint32_t le32(const uint8_t* p) { return p[0] | (p[1] << 8) | (p[2] << 16) | (uint32_t(p[3]) << 24); }
@@ -36,7 +36,17 @@ DirEntry parse_record(const uint8_t* rec) {
     if (name == std::string(1, '\0')) name = ".";
     else if (name == std::string(1, '\1')) name = "..";
     else if (auto semi = name.find(';'); semi != std::string::npos) name.resize(semi);
-    return {std::move(name), le32(rec + 2), le32(rec + 10), (rec[kFlagsOffset] & kDirectoryFlag) != 0};
+    DirEntry entry{std::move(name), le32(rec + 2), le32(rec + 10), (rec[kFlagsOffset] & kDirectoryFlag) != 0};
+    entry.attributes = rec[kFlagsOffset] & kDirectoryFlag;
+    entry.unit_size = rec[kUnitSizeOffset];
+    entry.gap_size = rec[kGapSizeOffset];
+    // Extensão XA na área de uso do sistema (depois do nome, alinhada a 2): atributos em +4, "XA" em +6, nº de arquivo em +8.
+    const size_t system_use = kNameOffset + (rec[kNameLengthOffset] | 1u), length = rec[0];
+    if (length >= system_use + 14 && rec[system_use + 6] == 'X' && rec[system_use + 7] == 'A') {
+        entry.attributes |= rec[system_use + 4] & 0xF8;
+        entry.file_number = rec[system_use + 8];
+    }
+    return entry;
 }
 
 void walk(const SectorReader& source, const DirEntry& dir, const std::string& prefix, std::set<uint32_t>& visited,

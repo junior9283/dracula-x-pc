@@ -13,11 +13,6 @@ void StorageDevice::write(uint32_t offset, int bytes, uint32_t value) {
         if (offset + i < bytes_.size()) bytes_[offset + i] = (value >> (8 * (bytes - 1 - i))) & 0xFF;
 }
 
-uint32_t SoundMailboxStub::read(uint32_t offset, int bytes) {
-    if (offset < kMailboxEnd && offset + bytes > kMailboxBegin) return 0;
-    return StorageDevice::read(offset, bytes);
-}
-
 void StorageDevice::set16(uint32_t offset, uint16_t value) { write(offset, 2, value); }
 
 }  // namespace saturn

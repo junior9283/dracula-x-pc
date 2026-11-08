@@ -1,5 +1,7 @@
 #include "saturn/bus.hpp"
 
+#include <algorithm>
+
 #include <stdexcept>
 
 namespace saturn {
@@ -13,13 +15,12 @@ struct Bus::Page {
 };
 
 struct Bus::Storage {
-    static constexpr uint32_t kPageShift = 12;
-    static constexpr uint32_t kPageSize = 1u << kPageShift;
-    static constexpr uint32_t kPageMask = kPageSize - 1;
+    static constexpr uint32_t kPageShift = Bus::kPageShift, kPageSize = Bus::kPageSize, kPageMask = Bus::kPageMask;
     static constexpr uint32_t kAddressSpace = 0x20000000;  // após a normalização do cache-through
 
     std::vector<Page> pages = std::vector<Page>(kAddressSpace >> kPageShift);
     std::vector<std::vector<uint8_t>> buffers;
+    std::vector<bool> is_rom;   // paralelo a `buffers`
 };
 
 namespace {
@@ -34,6 +35,12 @@ constexpr bool to_physical(uint32_t& address) {
 }
 }  // namespace
 
+// Toda remapeação passa aqui: invalida os atalhos de página (page_data) guardados pelas CPUs.
+Bus::Page& Bus::map_page(uint32_t address) {
+    ++map_generation_;
+    return storage_->pages.at(address >> S::kPageShift);
+}
+
 Bus::Bus() : storage_(std::make_unique<Storage>()) {}
 Bus::~Bus() = default;
 
@@ -41,9 +48,10 @@ void Bus::map_ram(uint32_t base, uint32_t size, uint32_t mirror_span) {
     if (!is_page_aligned(base) || !is_page_aligned(size) || size == 0 || mirror_span < size)
         throw std::invalid_argument("map_ram: base/tamanho precisam ser múltiplos de 4 KiB e mirror_span >= size");
     auto& buffer = storage_->buffers.emplace_back(size, 0);
+    storage_->is_rom.push_back(false);
     const auto index = static_cast<uint32_t>(storage_->buffers.size() - 1);
     for (uint32_t offset = 0; offset < mirror_span; offset += S::kPageSize) {
-        Page& page = storage_->pages.at((base + offset) >> S::kPageShift);
+        Page& page = map_page(base + offset);
         page = Page{buffer.data() + offset % size, nullptr, 0, false, index};
     }
 }
@@ -52,16 +60,17 @@ void Bus::map_rom(uint32_t base, std::span<const uint8_t> data) {
     if (!is_page_aligned(base)) throw std::invalid_argument("map_rom: base precisa ser múltipla de 4 KiB");
     const uint32_t padded = (static_cast<uint32_t>(data.size()) + S::kPageMask) & ~S::kPageMask;
     auto& buffer = storage_->buffers.emplace_back(padded, 0);
+    storage_->is_rom.push_back(true);
     std::copy(data.begin(), data.end(), buffer.begin());
     for (uint32_t offset = 0; offset < padded; offset += S::kPageSize)
-        storage_->pages.at((base + offset) >> S::kPageShift) = Page{buffer.data() + offset, nullptr, 0, true, UINT32_MAX};
+        map_page(base + offset) = Page{buffer.data() + offset, nullptr, 0, true, UINT32_MAX};
 }
 
 void Bus::map_io(uint32_t base, uint32_t size, IoDevice& device) {
     if (!is_page_aligned(base)) throw std::invalid_argument("map_io: base precisa ser múltipla de 4 KiB");
     const uint32_t padded = (size + S::kPageMask) & ~S::kPageMask;
     for (uint32_t offset = 0; offset < padded; offset += S::kPageSize)
-        storage_->pages.at((base + offset) >> S::kPageShift) = Page{nullptr, &device, offset, false, UINT32_MAX};
+        map_page(base + offset) = Page{nullptr, &device, offset, false, UINT32_MAX};
 }
 
 uint32_t Bus::unmapped(uint32_t address) {
@@ -106,13 +115,25 @@ void Bus::write(uint32_t address, uint32_t value) {
     if (page.data) {
         if (page.read_only) return;
         for (int i = 0; i < Bytes; ++i) page.data[in_page + i] = (value >> (8 * (Bytes - 1 - i))) & 0xFF;
+    } else if (page.device) {
+        page.device->write(page.device_offset + in_page, Bytes, value);
+    } else {
+        unmapped(original);
         return;
     }
-    if (page.device) { page.device->write(page.device_offset + in_page, Bytes, value); return; }
-    unmapped(original);
+    if (on_write) on_write(address, Bytes, value);
 }
 
 uint8_t Bus::read8(uint32_t address) { return static_cast<uint8_t>(read<1>(address)); }
+const Bus::Page* Bus::page_of(uint32_t address) const {
+    return to_physical(address) ? &storage_->pages[address >> S::kPageShift] : nullptr;
+}
+
+const uint8_t* Bus::page_data(uint32_t address) const {
+    const Page* page = page_of(address);
+    return page ? page->data : nullptr;
+}
+
 uint16_t Bus::read16(uint32_t address) { return static_cast<uint16_t>(read<2>(address)); }
 uint32_t Bus::read32(uint32_t address) { return read<4>(address); }
 void Bus::write8(uint32_t address, uint8_t value) { write<1>(address, value); }
@@ -120,13 +141,35 @@ void Bus::write16(uint32_t address, uint16_t value) { write<2>(address, value); 
 void Bus::write32(uint32_t address, uint32_t value) { write<4>(address, value); }
 
 std::span<uint8_t> Bus::ram_at(uint32_t address, size_t length) {
-    if (!to_physical(address)) return {};
-    const Page& page = storage_->pages[address >> S::kPageShift];
-    if (page.ram_index == UINT32_MAX) return {};
-    auto& buffer = storage_->buffers[page.ram_index];
-    const size_t offset = static_cast<size_t>(page.data - buffer.data()) + (address & S::kPageMask);
+    const Page* page = page_of(address);
+    if (!page || page->ram_index == UINT32_MAX) return {};
+    auto& buffer = storage_->buffers[page->ram_index];
+    const size_t offset = static_cast<size_t>(page->data - buffer.data()) + (address & S::kPageMask);
     if (offset + length > buffer.size()) return {};
     return {buffer.data() + offset, length};
+}
+
+// Só as RAMs entram no estado (ROMs vêm do boot); contadores de acesso não mapeado são diagnóstico da sessão e ficam fora.
+uint32_t Bus::ram_count() const {
+    return static_cast<uint32_t>(std::count(storage_->is_rom.begin(), storage_->is_rom.end(), false));
+}
+
+void Bus::save(StateWriter& w) const {
+    w.u32(ram_count());
+    for (size_t i = 0; i < storage_->buffers.size(); ++i) {
+        if (storage_->is_rom[i]) continue;
+        w.blob(storage_->buffers[i]);
+    }
+}
+
+void Bus::load(StateReader& r) {
+    if (r.u32() != ram_count()) throw StateError("save state: mapa de RAM diferente (máquina em outro modo de boot?)");
+    for (size_t i = 0; i < storage_->buffers.size(); ++i) {
+        if (storage_->is_rom[i]) continue;
+        auto& buffer = storage_->buffers[i];
+        if (r.u64() != buffer.size()) throw StateError("save state: tamanho de RAM diferente");
+        r.raw(buffer);
+    }
 }
 
 void map_standard_memory(Bus& bus) {

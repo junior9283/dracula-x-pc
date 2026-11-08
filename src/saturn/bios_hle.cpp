@@ -5,7 +5,10 @@
 namespace saturn {
 namespace {
 
-constexpr uint32_t kSlotSetVector = 0x06000300;       // r4 = vetor, r5 = handler: grava na tabela de vetores
+constexpr uint32_t kSlotSetVector = 0x06000300;       // SYS_SETUINT: r4 = vetor, r5 = tratador do SCU (chamado pelo trampolim)
+constexpr uint32_t kSlotGetVector = 0x06000304;       // SYS_GETUINT: r0 = tratador do SCU do vetor r4
+constexpr uint32_t kSlotSetSh2Vector = 0x06000310;    // SYS_SETSINT: grava r5 direto em VBR + 4·r4 (r5 = 0 restaura o padrão)
+constexpr uint32_t kSlotGetSh2Vector = 0x06000314;    // SYS_GETSINT: r0 = [VBR + 4·r4]
 constexpr uint32_t kSlotScuMask = 0x06000344;         // (IMS & r4) | r5 ; devolve o IMS antigo em r0
 constexpr uint32_t kVectorCount = 0x80;               // vetores 0–0x7F cabem antes da tabela de serviços (0x06000200)
 constexpr uint32_t kFirstInterruptVector = 0x40;
@@ -26,12 +29,39 @@ BiosHle::BiosHle(Bus& bus, Scu& scu) : bus_(bus), scu_(scu) {
         const auto& s = cpu.state();
         bus_.write32(kHandlerTable + s.r[4] * 4, s.r[5]);
     });
+    register_service(kSlotGetVector, [this](sh2::Cpu& cpu) {
+        auto& s = cpu.state();
+        s.r[0] = bus_.read32(kHandlerTable + s.r[4] * 4);
+    });
+    // A tabela é a do VBR de quem chama; o vetor 0x94 cai em 0x06000250, o ponto de entrada do escravo.
+    register_service(kSlotSetSh2Vector, [this](sh2::Cpu& cpu) {
+        const auto& s = cpu.state();
+        bus_.write32(s.vbr + s.r[4] * 4, s.r[5] != 0 ? s.r[5] : default_vector(s.r[4]));
+    });
+    register_service(kSlotGetSh2Vector, [this](sh2::Cpu& cpu) {
+        auto& s = cpu.state();
+        s.r[0] = bus_.read32(s.vbr + s.r[4] * 4);
+    });
     register_service(kSlotScuMask, [this](sh2::Cpu& cpu) {
         auto& s = cpu.state();
         const uint32_t old = scu_.read(0xA0, 4);
         scu_.write(0xA0, 4, (old & s.r[4]) | s.r[5]);
         s.r[0] = old;
     });
+}
+
+void BiosHle::register_backup_service(uint32_t function_index, Service service) {
+    if (function_index >= kBackupFunctionCount) throw std::out_of_range("índice de serviço BUP inválido");
+    backup_services_[function_index] = std::move(service);
+}
+
+uint32_t BiosHle::default_vector(uint32_t vector) {
+    if (vector >= kVectorCount) return 0;  // além da tabela: variáveis de sistema (ex.: 0x94 → 0x06000250)
+    return vector >= kFirstInterruptVector ? trap_address(kInterruptIndexBase + vector - kFirstInterruptVector) : trap_address(kExceptionIndexBase + vector);
+}
+
+void BiosHle::log_call(uint32_t slot, const sh2::Sh2State& s) {
+    if (calls_.size() < kMaxLoggedCalls) calls_.push_back({slot, s.pr, {s.r[4], s.r[5], s.r[6], s.r[7]}});
 }
 
 void BiosHle::return_from_interrupt(sh2::Sh2State& s) {  // rte: PC e SR empilhados pela entrada da exceção
@@ -51,10 +81,12 @@ void BiosHle::install(sh2::Cpu& cpu) {
     // Slots de serviço na RAM: um gatilho por slot; as variáveis de sistema ficam zeradas.
     for (uint32_t slot = kServiceTableBase; slot < kServiceTableEnd; slot += 4)
         bus_.write32(slot, (slot >= kSystemVariablesBegin && slot < kSystemVariablesEnd) ? 0 : trap_address(kRamSlotIndex + (slot - kServiceTableBase) / 4));
+    // Este slot é um ponteiro para a tabela da biblioteca de backup (BUP_Init
+    // em 0x06000358 irá preenchê-lo), e não um endereço de serviço executável.
+    bus_.write32(0x06000354, 0);
 
     // Vetores de interrupção: handler padrão do BIOS (rte); vetores de exceção: um gatilho fatal por vetor.
-    for (uint32_t vector = 0; vector < kVectorCount; ++vector)
-        bus_.write32(kVectorBase + vector * 4, vector >= kFirstInterruptVector ? trap_address(kInterruptIndexBase + vector - kFirstInterruptVector) : trap_address(kExceptionIndexBase + vector));
+    for (uint32_t vector = 0; vector < kVectorCount; ++vector) bus_.write32(kVectorBase + vector * 4, default_vector(vector));
     cpu.state().vbr = kVectorBase;
 }
 
@@ -85,6 +117,19 @@ bool BiosHle::handle(sh2::Cpu& cpu) {
         return_from_interrupt(s);
         return true;
     }
+    if (index >= kBackupIndexBase && index < kBackupIndexBase + kBackupFunctionCount) {
+        const uint32_t function_index = index - kBackupIndexBase;
+        s.pc = s.pr;
+        if (const auto service = backup_services_.find(function_index); service != backup_services_.end()) {
+            service->second(cpu);
+        } else {
+            if (strict_)
+                throw MachineError("serviço BUP não implementado: índice " + std::to_string(function_index) + " (retorno " + hex(s.pr) + ")");
+            // Marcador de diagnóstico fora do espaço de slots reais da BIOS.
+            log_call(0xFFFF0000u + function_index * 4, s);
+        }
+        return true;
+    }
     if (index >= kExceptionIndexBase)
         throw MachineError("exceção sem tratamento: vetor " + std::to_string(index - kExceptionIndexBase) + ", PC salvo " + hex(bus_.read32(s.r[15])));
 
@@ -95,7 +140,7 @@ bool BiosHle::handle(sh2::Cpu& cpu) {
     } else {
         if (strict_)
             throw MachineError("serviço do BIOS não implementado: slot " + hex(slot) + " (retorno " + hex(s.pr) + ", r4=" + hex(s.r[4]) + ", r5=" + hex(s.r[5]) + ")");
-        if (calls_.size() < kMaxLoggedCalls) calls_.push_back({slot, s.pr, {s.r[4], s.r[5], s.r[6], s.r[7]}});
+        log_call(slot, s);
     }
     return true;
 }

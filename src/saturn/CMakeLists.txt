@@ -1,5 +1,5 @@
 file(GLOB SATURN_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 add_library(saturn STATIC ${SATURN_SOURCES})
 target_include_directories(saturn PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(saturn PUBLIC saturnfs)
+target_link_libraries(saturn PUBLIC saturnfs dxpc_audio)
 target_compile_features(saturn PUBLIC cxx_std_20)

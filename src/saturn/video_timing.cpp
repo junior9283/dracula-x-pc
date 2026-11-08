@@ -10,15 +10,17 @@ constexpr uint16_t kTvstatVBlank = 1u << 3, kTvstatHBlank = 1u << 2, kTvstatOdd 
 
 void VideoTiming::advance(uint64_t cycles) {
     while (cycles > 0) {
-        const uint32_t next_mark = hblank_ ? kCyclesPerLine : kHBlankStart;
+        // O modo pode mudar no meio da linha: uma marca que já ficou para trás vale como alcançada.
+        const uint32_t line_end = cycles_per_line(), hblank_at = hblank_start();
+        const uint32_t next_mark = std::max(cycle_, hblank_ ? line_end : hblank_at);
         const uint32_t step = static_cast<uint32_t>(std::min<uint64_t>(cycles, next_mark - cycle_));
         cycle_ += step;
         cycles -= step;
 
-        if (!hblank_ && cycle_ == kHBlankStart) {
+        if (!hblank_ && cycle_ >= hblank_at) {
             hblank_ = true;
             scu_.raise(Scu::Interrupt::HBlankIn);
-        } else if (cycle_ == kCyclesPerLine) {
+        } else if (hblank_ && cycle_ >= line_end) {
             cycle_ = 0;
             hblank_ = false;
             if (++line_ == kLines) {
@@ -26,12 +28,30 @@ void VideoTiming::advance(uint64_t cycles) {
                 ++frame_;
                 vblank_ = false;
                 scu_.raise(Scu::Interrupt::VBlankOut);
-            } else if (line_ == kVBlankLine) {
+            } else if (line_ == visible_lines()) {
                 vblank_ = true;
                 scu_.raise(Scu::Interrupt::VBlankIn);
             }
         }
     }
+}
+
+void VideoTiming::save(StateWriter& w) const {
+    w.raw(regs_);
+    w.u32(line_);
+    w.u32(cycle_);
+    w.boolean(hblank_);
+    w.boolean(vblank_);
+    w.u64(frame_);
+}
+
+void VideoTiming::load(StateReader& r) {
+    r.raw(regs_);
+    line_ = r.u32();
+    cycle_ = r.u32();
+    hblank_ = r.boolean();
+    vblank_ = r.boolean();
+    frame_ = r.u64();
 }
 
 uint16_t VideoTiming::tvstat() const {

@@ -1,9 +1,8 @@
 #include "saturnfs/sha256.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bit>
-#include <cstdio>
-#include <vector>
 
 namespace saturnfs {
 namespace {
@@ -19,7 +18,7 @@ constexpr std::array<uint32_t, 64> kRound = {
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
 
 void compress(std::array<uint32_t, 8>& h, const uint8_t* block) {
-    std::array<uint32_t, 64> w{};
+    std::array<uint32_t, 64> w;
     for (int i = 0; i < 16; ++i)
         w[i] = (uint32_t(block[4 * i]) << 24) | (block[4 * i + 1] << 16) | (block[4 * i + 2] << 8) | block[4 * i + 3];
     for (int i = 16; i < 64; ++i) {
@@ -38,25 +37,50 @@ void compress(std::array<uint32_t, 8>& h, const uint8_t* block) {
 
 }  // namespace
 
-std::string sha256_hex(std::span<const uint8_t> data) {
-    std::array<uint32_t, 8> h = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
-
-    std::vector<uint8_t> tail(data.end() - data.size() % 64, data.end());
-    for (size_t i = 0; i + 64 <= data.size(); i += 64) compress(h, data.data() + i);
-
-    tail.push_back(0x80);
-    tail.resize(tail.size() <= 56 ? 56 : 120, 0);
-    uint64_t bits = uint64_t(data.size()) * 8;
-    for (int i = 7; i >= 0; --i) tail.push_back(uint8_t(bits >> (8 * i)));
-    for (size_t i = 0; i < tail.size(); i += 64) compress(h, tail.data() + i);
-
-    std::string hex;
-    for (uint32_t word : h) {
-        char buf[9];
-        std::snprintf(buf, sizeof buf, "%08x", word);
-        hex += buf;
+void Sha256::update(std::span<const uint8_t> data) {
+    length_ += data.size();
+    size_t i = 0;
+    if (used_) {
+        const size_t take = std::min(data.size(), block_.size() - used_);
+        std::copy_n(data.begin(), take, block_.begin() + used_);
+        used_ += take;
+        i = take;
+        if (used_ < block_.size()) return;
+        compress(h_, block_.data());
+        used_ = 0;
     }
-    return hex;
+    for (; i + 64 <= data.size(); i += 64) compress(h_, data.data() + i);
+    std::copy(data.begin() + i, data.end(), block_.begin());
+    used_ = data.size() - i;
+}
+
+Sha256::Digest Sha256::digest() const {
+    Sha256 tail = *this;   // o padding é aplicado numa cópia: o estado continua aceitando update()
+    const uint64_t bits = length_ * 8;
+    static constexpr uint8_t kPad[64] = {0x80};
+    tail.update(std::span(kPad, used_ < 56 ? 56 - used_ : 120 - used_));
+    std::array<uint8_t, 8> length{};
+    for (int i = 0; i < 8; ++i) length[i] = uint8_t(bits >> (56 - 8 * i));
+    tail.update(length);
+    Digest out;
+    for (int i = 0; i < 32; ++i) out[i] = uint8_t(tail.h_[i / 4] >> (24 - 8 * (i % 4)));
+    return out;
+}
+
+std::string to_hex(std::span<const uint8_t> bytes) {
+    static constexpr char kDigits[] = "0123456789abcdef";
+    std::string s;
+    s.reserve(bytes.size() * 2);
+    for (uint8_t b : bytes) { s += kDigits[b >> 4]; s += kDigits[b & 15]; }
+    return s;
+}
+
+std::string Sha256::hex() const { return to_hex(digest()); }
+
+std::string sha256_hex(std::span<const uint8_t> data) {
+    Sha256 h;
+    h.update(data);
+    return h.hex();
 }
 
 }  // namespace saturnfs

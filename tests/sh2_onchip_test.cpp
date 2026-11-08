@@ -111,3 +111,58 @@ TEST_CASE("array de dados do cache (0xC0000000, 4 KiB) funciona como RAM rápida
     b.run(2);
     CHECK(b.r(3) == 0x11223344u);
 }
+
+TEST_CASE("FRT: sinal de captura de entrada levanta ICF e copia o FRC para o ICR; ICF zera ao escrever 0") {
+    Sh2Rig rig;
+    rig.cpu.onchip().write(kFrc, 2, 0x1234);
+    rig.cpu.onchip().signal_input_capture();
+    CHECK((rig.cpu.onchip().read(kFtcsr, 1) & 0x80) == 0x80);
+    CHECK(rig.cpu.onchip().read(0x18, 2) == 0x1234u);       // ICR
+    rig.cpu.onchip().write(kFtcsr, 1, 0x00);
+    CHECK((rig.cpu.onchip().read(kFtcsr, 1) & 0x80) == 0);
+}
+
+namespace {
+constexpr uint32_t kSar0 = 0x180, kDar0 = 0x184, kTcr0 = 0x188, kChcr0 = 0x18C, kVcrdma0 = 0x1A0, kDmaor = 0x1B0;
+}
+
+TEST_CASE("DMAC canal 0 em pedido automático: copia TCR palavras, avança SAR/DAR, zera TCR e liga TE") {
+    Sh2Rig rig;
+    for (uint32_t i = 0; i < 8; ++i) rig.bus.write16(0x06010000 + 2 * i, static_cast<uint16_t>(0x1100 + i));
+    wr32(rig, kSar0, 0x06010000);
+    wr32(rig, kDar0, 0x06020000);
+    wr32(rig, kTcr0, 8);
+    wr32(rig, kDmaor, 1);
+    wr32(rig, kChcr0, 0x5600);                       // DM/SM incrementam, palavra, pedido automático; DE ainda desligado
+    CHECK(rig.bus.read16(0x06020000) == 0u);         // nada copiado antes de DE
+    wr32(rig, kChcr0, 0x5601);                       // liga DE
+
+    for (uint32_t i = 0; i < 8; ++i) CHECK(rig.bus.read16(0x06020000 + 2 * i) == 0x1100 + i);
+    CHECK(rd32(rig, kTcr0) == 0u);
+    CHECK(rd32(rig, kSar0) == 0x06010010u);
+    CHECK(rd32(rig, kDar0) == 0x06020010u);
+    CHECK((rd32(rig, kChcr0) & 2) == 2u);            // TE
+    wr32(rig, kChcr0, rd32(rig, kChcr0) & ~3u);      // o software zera TE (e DE) escrevendo 0
+    CHECK((rd32(rig, kChcr0) & 2) == 0u);
+}
+
+TEST_CASE("DMAC: sem DME em DMAOR a transferência não acontece; com IE, TE gera a interrupção do VCRDMA0") {
+    Sh2Rig rig;
+    rig.bus.write32(0x06010000, 0xCAFEBABE);
+    wr32(rig, kSar0, 0x06010000);
+    wr32(rig, kDar0, 0x06020000);
+    wr32(rig, kTcr0, 1);
+    wr32(rig, kChcr0, 0x5A05);                       // DM/SM incrementam, longword, pedido automático, IE, DE
+    CHECK(rig.bus.read32(0x06020000) == 0u);         // DME desligado
+
+    rig.s().vbr = 0x06001000;
+    rig.bus.write32(0x06001000 + 0x50 * 4, 0x06002000);
+    rig.s().sr = 0;
+    wr32(rig, kVcrdma0, 0x50);
+    rig.cpu.onchip().write(kIpra, 2, 0x0500);        // DMAC no nível 5
+    wr32(rig, kDmaor, 1);                            // ligar DME com DE já ligado dispara a transferência
+    CHECK(rig.bus.read32(0x06020000) == 0xCAFEBABEu);
+    rig.load({Sh2Rig::kNop});
+    rig.run(1);                                      // aceita a interrupção
+    CHECK(rig.s().pc == 0x06002000u);
+}

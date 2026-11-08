@@ -52,6 +52,7 @@ public:
     Cpu(saturn::Bus& bus, int id);
 
     void reset(uint32_t pc, uint32_t sp);
+    static constexpr int kNmiLevel = 16, kNmiVector = 11;   // NMI: acima de qualquer máscara; vetor 11
     uint32_t step();  // executa uma instrução (ou entra numa exceção) e devolve os ciclos
     Sh2State& state() { return s_; }
     int id() const { return id_; }
@@ -62,6 +63,11 @@ public:
     // Pede uma interrupção (nível 1–15; 16 = NMI, que ignora SR.I). Fica pendente até ser atendida entre duas instruções.
     void raise_interrupt(int level, int vector);
     bool sleeping() const { return sleeping_; }
+
+    // Save state: registradores, E/S interna, array de dados do cache, interrupção pendente e flags. O atalho de busca (fetch_page_) é
+    // invalidado no load. O delay slot é executado dentro de step(), então não há estado de delay slot entre instruções.
+    void save(saturn::StateWriter& w) const;
+    void load(saturn::StateReader& r);
     std::function<void(int level, int vector)> on_interrupt_taken;
 
 private:
@@ -80,6 +86,9 @@ private:
     void store16(uint32_t a, uint32_t v);
     void store32(uint32_t a, uint32_t v);
 
+    // Busca de instrução (endereço par): lê direto da página de RAM/ROM em cache; o resto vai por read().
+    uint16_t fetch16(uint32_t address);
+
     void enter_exception(int vector, uint32_t saved_pc);
     // Executa a instrução do delay slot (em op_address_+2) e só então salta para `target`. Desvios no slot → exceção 6.
     uint32_t delay_slot(uint32_t target);
@@ -92,8 +101,13 @@ private:
     ExecutionRecorder* recorder_ = nullptr;
     std::array<uint8_t, 4096> cache_data_{};   // array de dados do cache (0xC0000000), usado como RAM rápida
     uint32_t op_address_ = 0;  // endereço da instrução em execução
+    void invalidate_fetch_cache() { fetch_page_ = nullptr; fetch_tag_ = UINT32_MAX; fetch_generation_ = UINT32_MAX; }
+    const uint8_t* fetch_page_ = nullptr;          // página da última busca (nullptr = passar pelo barramento)
+    uint32_t fetch_tag_ = UINT32_MAX;              // endereço >> Bus::kPageShift dessa página
+    uint32_t fetch_generation_ = UINT32_MAX;       // Bus::map_generation() quando ela foi resolvida
 
     static const OpcodeTable& table();
+    const OpcodeTable& table_ = table();  // guardada: evita a guarda do static local a cada instrução
 
     int pending_level_ = 0;      // 0 = nenhuma
     int pending_vector_ = 0;

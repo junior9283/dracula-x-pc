@@ -1,10 +1,13 @@
 #pragma once
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
 #include <span>
 #include <vector>
+
+#include "saturn/state.hpp"
 
 namespace saturn {
 
@@ -20,6 +23,8 @@ public:
 // são normalizados para 0x1FFFFFFF; o espaço de E/S interna do SH-2 (0xFFFFFE00+) é tratado pela CPU, não aqui.
 class Bus {
 public:
+    static constexpr uint32_t kPageShift = 12, kPageSize = 1u << kPageShift, kPageMask = kPageSize - 1;  // páginas de 4 KiB
+
     Bus();
     ~Bus();
 
@@ -35,6 +40,15 @@ public:
     void write16(uint32_t address, uint16_t value);
     void write32(uint32_t address, uint32_t value);
 
+    // Diagnóstico opcional: uma chamada após cada escrita efetiva pelo barramento.
+    // O endereço é físico (aliases 0x2... normalizados); escritas diretas via ram_at não passam aqui.
+    std::function<void(uint32_t address, int bytes, uint32_t value)> on_write;
+
+    // Busca rápida de instruções: bytes da página de 4 KiB de RAM/ROM que contém `address` (nullptr se for E/S ou não mapeada).
+    // O ponteiro vale enquanto map_generation() não mudar.
+    const uint8_t* page_data(uint32_t address) const;
+    uint32_t map_generation() const { return map_generation_; }
+
     // Trecho contíguo da RAM física a partir de `address`; vazio se não for RAM ou se atravessar o fim dela.
     std::span<uint8_t> ram_at(uint32_t address, size_t length);
 
@@ -43,10 +57,18 @@ public:
     // Acessos não mapeados por página de 4 KiB (endereço físico do início da página).
     const std::map<uint32_t, uint64_t>& unmapped_pages() const { return unmapped_pages_; }
 
+    // Save state: conteúdo de todas as RAMs mapeadas (as ROMs não entram) e contadores de acessos não mapeados. O mapeamento em si é
+    // estrutural (feito na construção/boot) e não é serializado; load exige o mesmo mapeamento.
+    void save(StateWriter& w) const;
+    void load(StateReader& r);
+    uint32_t ram_count() const;   // buffers de RAM (os que entram no save state)
+
     struct Page;
     struct Storage;
 
 private:
+    const Page* page_of(uint32_t address) const;  // nullptr fora do espaço físico
+    Page& map_page(uint32_t address);             // entrada da página para (re)mapear; invalida os atalhos
     uint32_t unmapped(uint32_t address);  // contabiliza o acesso e devolve 0
     template <int Bytes> uint32_t read(uint32_t address);
     template <int Bytes> void write(uint32_t address, uint32_t value);
@@ -54,6 +76,7 @@ private:
     std::unique_ptr<Storage> storage_;
     uint64_t unmapped_count_ = 0;
     std::optional<uint32_t> first_unmapped_;
+    uint32_t map_generation_ = 0;
     std::map<uint32_t, uint64_t> unmapped_pages_;
 };
 

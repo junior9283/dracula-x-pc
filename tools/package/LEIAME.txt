@@ -1,0 +1,41 @@
+Akumajou Dracula X - Gekka no Yasoukyoku (Sega Saturn) - port nativo para PC
+============================================================================
+
+Este pacote NÃO contém nada do jogo. Você precisa do seu próprio disco
+(T-9527G, versão 1.400, Japão) em imagem .cue/.bin.
+
+Primeira execução
+-----------------
+1. Abra o dracula-x (Windows: dracula-x.exe).
+2. Uma janela pede o arquivo .cue do seu disco. O port confere a versão e
+   gera um pacote local (dracula-x.pak, ~400 MB) na pasta de dados do
+   usuário. Depois disso o disco não é mais necessário.
+   Pela linha de comando: dracula-x --install "caminho/do/disco.cue"
+
+Modo portátil: se houver um dracula-x.pak ao lado do executável, ele é usado
+(e os saves ficam ali). Para escolher outra pasta: --data-dir pasta
+
+Pasta de dados do usuário
+  Linux:   ~/.local/share/dracula-x-pc/dracula-x/
+  Windows: %APPDATA%\dracula-x-pc\dracula-x\
+
+Controles padrão (teclado; tudo pode ser remapeado no menu)
+  Setas = direcional   Enter = Start
+  Z / X / C = A / B / C      A / S / D = X / Y / Z      Q / W = L / R
+Controles de videogame (Xbox, PlayStation etc.) são reconhecidos ao conectar.
+
+Menu do port (Esc, ou Back/Guide no controle)
+  Pausa o jogo. Navegue com setas/mouse/controle; Enter/clique/A confirma; Esc/B volta.
+  - Save states: 8 slots (salvar/carregar)
+  - Vídeo: janela ou tela cheia, escala inteira, proporção, filtro, scanlines, vsync
+  - Áudio: volume, mudo, latência
+  - Controles: remapear teclado e controle, zona morta do analógico
+  - Galeria da trilha sonora: ouve as músicas do jogo (lidas do seu pacote local)
+  As opções ficam em dracula-x.ini, na pasta de dados.
+
+Atalhos
+  F5 = salvar estado no slot atual   F7 = carregar   F6 / F8 = slot anterior / próximo
+  F11 = tela cheia   F12 = captura de tela (na pasta de dados)
+  Os saves normais do jogo (memória interna do Saturn) são gravados sozinhos em dracula-x.bup.
+
+Opções de linha de comando: dracula-x --help

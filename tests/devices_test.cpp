@@ -34,16 +34,3 @@ TEST_CASE("ConstantDevice devolve sempre o mesmo byte e ignora escritas") {
     CHECK(device.read(0x20, 2) == 0xFFFFu);
     CHECK(device.read(0x20, 4) == 0xFFFFFFFFu);
 }
-
-TEST_CASE("SoundMailboxStub: a caixa de correio do driver sempre lê zero; o resto da página guarda normalmente") {
-    saturn::SoundMailboxStub device;
-
-    device.write(0x700, 1, 0x86);
-    CHECK(device.read(0x700, 1) == 0u);          // comando "já aceito" pelo driver ausente
-    CHECK(device.read(0x70C, 4) == 0u);
-
-    device.write(0x100, 4, 0xDEADBEEF);
-    CHECK(device.read(0x100, 4) == 0xDEADBEEFu);
-    device.write(0x710, 1, 0x55);
-    CHECK(device.read(0x710, 1) == 0x55u);       // fora da caixa de correio
-}

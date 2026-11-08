@@ -122,3 +122,27 @@ TEST_CASE("acessos não mapeados são contados por página de 4 KiB (leitura e e
     CHECK(pages.at(0x05D00000) == 3u);
     CHECK(pages.at(0x05F80000) == 1u);
 }
+
+TEST_CASE("observador de escrita vê RAM, alias físico e E/S, mas ignora ROM e endereços não mapeados") {
+    Bus bus;
+    saturn::map_standard_memory(bus);
+    Recorder device;
+    bus.map_io(0x05FE0000, 0x1000, device);
+    bus.map_rom(0, std::vector<uint8_t>(0x1000));
+    struct Write { uint32_t address; int bytes; uint32_t value; };
+    std::vector<Write> writes;
+    bus.on_write = [&](uint32_t address, int bytes, uint32_t value) { writes.push_back({address, bytes, value}); };
+
+    bus.write32(0x26000010, 0x12345678);
+    bus.write16(0x05FE0010, 0xABCD);
+    bus.write8(0x00000000, 0xAA);
+    bus.write8(0x04000000, 0xBB);
+
+    REQUIRE(writes.size() == 2);
+    CHECK(writes[0].address == 0x06000010u);
+    CHECK(writes[0].bytes == 4);
+    CHECK(writes[0].value == 0x12345678u);
+    CHECK(writes[1].address == 0x05FE0010u);
+    CHECK(writes[1].bytes == 2);
+    CHECK(writes[1].value == 0xABCDu);
+}

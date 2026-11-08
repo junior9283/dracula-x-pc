@@ -6,3 +6,6 @@ data-local/
 .superpowers/
 build-release/
 build-*/
+deps-win/
+dist/
+.claude/

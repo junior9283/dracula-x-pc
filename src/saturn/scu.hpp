@@ -3,6 +3,8 @@
 #include <functional>
 
 #include "saturn/bus.hpp"
+#include "saturn/scu_dsp.hpp"
+#include "saturn/state.hpp"
 
 namespace saturn {
 
@@ -16,10 +18,19 @@ public:
         Dma2End, Dma1End, Dma0End, DmaIllegal, SpriteEnd
     };
 
-    explicit Scu(Bus& bus) : bus_(bus) {}
+    explicit Scu(Bus& bus) : bus_(bus), dsp_(bus) {
+        dsp_.on_end_interrupt = [this] { raise(Interrupt::DspEnd); };
+    }
 
     uint32_t read(uint32_t offset, int bytes) override;
     void write(uint32_t offset, int bytes, uint32_t value) override;
+
+    void save(StateWriter& w) const;
+    void load(StateReader& r);
+
+    void advance(uint32_t cycles) { dsp_.advance(cycles); }
+    void reset();   // reset por software (CKCHG do SMPC): máscara 0xBFFF, nada pendente, DMA e DSP parados
+    ScuDsp& dsp() { return dsp_; }
 
     void raise(Interrupt source);
     void acknowledge(int vector);
@@ -33,6 +44,7 @@ private:
     void run_dma(int level);
 
     Bus& bus_;
+    ScuDsp dsp_;
     uint32_t regs_[0x100 / 4] = {};
     uint32_t ims_ = 0xFFFFFFFF, ist_ = 0;
     uint32_t line_counter_ = 0;

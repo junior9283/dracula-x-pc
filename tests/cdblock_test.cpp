@@ -15,7 +15,7 @@ constexpr uint32_t kHirq = 0x08, kHirqMask = 0x0C, kCr1 = 0x18, kCr2 = 0x1C, kCr
 constexpr uint32_t kFadOffset = 150;
 
 struct CdRig {
-    std::string big = std::string(3000, 'b');   // atravessa 2 setores
+    std::string big;                            // por padrão 3000 bytes: atravessa 2 setores
     saturnfs::DiscImage disc;
     CdBlock cd;
 
@@ -24,7 +24,7 @@ struct CdRig {
         iso.add("A.TXT", "alfa").add("DIR/B.BIN", big);
         return open_disc(iso, tag);
     }
-    explicit CdRig(const std::string& tag) : disc(make_disc(big, tag)), cd(disc) {}
+    explicit CdRig(const std::string& tag, size_t big_bytes = 3000) : big(big_bytes, 'b'), disc(make_disc(big, tag)), cd(disc) {}
 
     using Reply = std::array<uint16_t, 4>;
     // Escreve CR1–CR4 (CR4 por último dispara o comando) e devolve a resposta.
@@ -62,7 +62,10 @@ TEST_CASE("GetStatus: pausa na posição inicial (FAD 150) com disco de dados e 
 TEST_CASE("HIRQ: escrever 0 limpa o bit; a máscara é legível e escrevível; irq_pending reflete HIRQ & máscara") {
     CdRig rig("cd2");
     rig.cmd(0x0000);
-    CHECK_FALSE(rig.cd.irq_pending());              // máscara 0
+    CHECK(rig.cd.read(kHirqMask, 2) == 0xFFFFu);    // reset atual: todas as fontes habilitadas
+    CHECK(rig.cd.irq_pending());                     // CMOK habilitado
+    rig.cd.write(kHirqMask, 2, 0);                  // desabilita interrupções
+    CHECK_FALSE(rig.cd.irq_pending());
     rig.cd.write(kHirqMask, 2, 0x0001);
     CHECK(rig.cd.read(kHirqMask, 2) == 1u);
     CHECK(rig.cd.irq_pending());
@@ -83,7 +86,7 @@ TEST_CASE("ChangeDirectory na raiz + GetFileSystemScope: número de entradas; Ge
     rig.cmd(0x7000, 0, 0x00FF, 0xFFFF);                 // ChangeDirectory (0x70): raiz (id 0xFFFFFF)
     CHECK((rig.hirq() & 0x200) != 0);                   // EFLS
     auto scope = rig.cmd(0x7200);
-    CHECK(scope[1] == 4u);                              // ".", "..", "DIR", "A.TXT"
+    CHECK(scope[1] == 2u);                              // conta só "DIR" e "A.TXT" (sem "." e "..")
 
     rig.cmd(0x7300, 0, 0x0000, 3);                      // GetFileInfo id 3 (A.TXT)
     CHECK((rig.hirq() & 0x02) != 0);                    // DRDY
@@ -92,9 +95,50 @@ TEST_CASE("ChangeDirectory na raiz + GetFileSystemScope: número de entradas; Ge
     const uint32_t size = (uint8_t(info[4]) << 24) | (uint8_t(info[5]) << 16) | (uint8_t(info[6]) << 8) | uint8_t(info[7]);
     CHECK(fad == rig.lba_of("A.TXT") + kFadOffset);
     CHECK(size == 4u);
-    CHECK(uint8_t(info[10]) == 3u);                     // número do arquivo
+    CHECK(uint8_t(info[10]) == 0u);                     // número de arquivo XA (sem registro XA na ISO de teste)
     CHECK(uint8_t(info[11]) == 0u);                     // atributo: arquivo
     rig.cmd(0x0600);                                    // EndDataTransfer
+}
+
+TEST_CASE("ReadDirectory pagina registros do diretório atual sem entrar no arquivo escolhido") {
+    CdRig rig("cd-read-dir");
+    rig.cmd(0x7000, 0, 0x00FF, 0xFFFF); // raiz
+    auto initial = rig.cmd(0x7200);
+    CHECK(initial[1] == 2u);
+    CHECK(initial[2] == 0x0100u);  // último lote disponível
+    CHECK(initial[3] == 2u);
+
+    auto loaded = rig.cmd(0x7100, 0, 0x0000, 3); // recomeça em A.TXT (ID 3)
+    CHECK(loaded[0] != 0xFF00u);
+    auto scope = rig.cmd(0x7200);
+    CHECK(scope[1] == 1u);
+    CHECK(scope[3] == 3u);
+
+    CHECK(rig.cmd(0x7300, 0, 0, 2)[0] == 0xFF00u); // DIR ficou fora da janela
+    CHECK(rig.cmd(0x7300, 0, 0, 3)[1] == 6u);
+    CHECK(rig.read_port(12).size() == 12u);
+    rig.cmd(0x0600);
+
+    CHECK(rig.cmd(0x7100, 0, 0x17FF, 0xFFF8)[0] == 0xFF00u); // ID inválido, não há troca de diretório
+    CHECK(rig.cmd(0x7200)[3] == 3u); // uma requisição rejeitada não muda a janela
+    CHECK(rig.cmd(0x7100, 0, 0x0000, 0)[0] != 0xFF00u); // reinício de enumeração
+    CHECK(rig.cmd(0x7200)[3] == 2u);
+}
+
+TEST_CASE("GetFileInfo aceita os identificadores reservados do diretório atual e pai") {
+    CdRig rig("cd-reserved-info");
+    rig.cmd(0x7000, 0, 0x00FF, 0xFFFF);
+    for (uint16_t id : {uint16_t(0), uint16_t(1)}) {
+        const auto resposta = rig.cmd(0x7300, 0, 0, id);
+        CHECK(resposta[0] != 0xFF00u);
+        CHECK(resposta[1] == 6u);
+        const std::string info = rig.read_port(12);
+        CHECK(static_cast<uint8_t>(info[10]) == 0u);   // número de arquivo XA, não o id
+        CHECK((static_cast<uint8_t>(info[11]) & 2u) == 2u);
+        rig.cmd(0x0600);
+    }
+    rig.cmd(0x7100, 0, 0, 3);
+    CHECK(rig.cmd(0x7300, 0, 0, 0)[1] == 6u); // as duas entradas permanecem acessíveis
 }
 
 TEST_CASE("ReadFile de DIR/B.BIN: sai pelo conector do filtro, 2 setores no buffer, bytes iguais ao arquivo") {
@@ -131,6 +175,23 @@ TEST_CASE("Play em modo FAD roteia os setores e o filtro de faixa de FAD descart
     CHECK((rig.hirq() & 0x10) != 0);                    // PEND
 }
 
+TEST_CASE("Play de uma faixa maior que o buffer: para com BFUL em 200 setores e retoma quando o jogo libera espaço") {
+    constexpr uint32_t kSectors = 300;
+    CdRig rig("cd-stream", kSectors * 2048);
+    const uint32_t fad = rig.lba_of("DIR/B.BIN") + kFadOffset;
+    rig.cmd(0x3000, 0, 0x0000, 0);                      // conector -> filtro 0
+    rig.cmd(0x4601, 0x0000, 0x0000, 0);                 // filtro 0 -> partição 0
+    rig.cmd(0x1000 | (0x80 | (fad >> 16)), fad & 0xFFFF, 0x0080, kSectors);   // Play: FAD, 300 setores
+
+    CHECK(rig.cmd(0x5100, 0, 0x0000, 0)[3] == 200u);
+    CHECK((rig.hirq() & 0x08) != 0);                    // BFUL
+    CHECK((rig.hirq() & 0x10) == 0);                    // ainda não terminou
+
+    rig.cmd(0x6200, 0, 0x0000, 0xFFFF);                 // DeleteSectorData: tudo
+    CHECK(rig.cmd(0x5100, 0, 0x0000, 0)[3] == 100u);    // a leitura continuou de onde parou
+    CHECK((rig.hirq() & 0x10) != 0);                    // PEND: fim da faixa pedida
+}
+
 TEST_CASE("comando desconhecido: resposta 0xFF00 (rejeitado), registrado, e CMOK ainda sinalizado") {
     CdRig rig("cd7");
     auto r = rig.cmd(0x9900);
@@ -164,7 +225,7 @@ TEST_CASE("GetTOC (0x02): 102 entradas de 4 bytes pela porta de dados; faixa 1 d
     CHECK((entry(101) & 0xFFFFFF) == rig.disc.sector_count() + kFadOffset);   // A2: lead-out
 }
 
-TEST_CASE("GetSessionInfo (0x03): sessão 0 = número de sessões e lead-out; sessão 1 = primeira faixa e FAD inicial") {
+TEST_CASE("GetSessionInfo (0x03): sessão 0 = número de sessões e lead-out; sessão 1 = primeira faixa e FAD inicial 0") {
     CdRig rig("cd10");
     auto all = rig.cmd(0x0300);
     const uint32_t leadout = rig.disc.sector_count() + kFadOffset;
@@ -174,7 +235,7 @@ TEST_CASE("GetSessionInfo (0x03): sessão 0 = número de sessões e lead-out; se
 
     auto first = rig.cmd(0x0301);
     CHECK((first[2] >> 8) == 1u);                       // primeira faixa
-    CHECK(first[3] == kFadOffset);
+    CHECK(first[3] == 0u);                              // FAD inicial da sessão 1 = 0: o jogo soma 0xA6 (150 + 16) para achar o descritor ISO
 }
 
 TEST_CASE("on_command recebe o comando e a resposta de cada execução") {
@@ -205,4 +266,68 @@ TEST_CASE("o drive atualiza o subcódigo Q periodicamente: advance() liga HIRQ.S
     CHECK((rig.hirq() & 0x0400) == 0u);
     rig.cd.advance(CdBlock::kCyclesPerSubcodeFrame * 3);
     CHECK((rig.hirq() & 0x0400) != 0u);            // e ele volta
+}
+
+TEST_CASE("DATATRNS no offset 0 dos registradores lê a mesma fila de transferência da porta de dados") {
+    CdRig rig("cd_datatrns");
+    rig.cmd(0x7000, 0, 0x00FF, 0xFFFF);                 // ChangeDirectory: raiz
+    rig.cmd(0x7300, 0, 0x0000, 3);                      // GetFileInfo id 3 (A.TXT): 12 bytes = 6 palavras
+    const uint32_t fad = rig.lba_of("A.TXT") + kFadOffset;
+    CHECK(rig.cd.read(0x00, 2) == (fad >> 16));         // 1ª palavra de 16 bits: FAD alto
+    CHECK(rig.cd.read(0x00, 2) == (fad & 0xFFFF));
+    CHECK(rig.cd.read(0x00, 2) == 0u);                  // tamanho alto
+    CHECK(rig.cd.read(0x00, 2) == 4u);
+    rig.cd.read(0x00, 2); rig.cd.read(0x00, 2);
+    auto end = rig.cmd(0x0600);                         // EndDataTransfer devolve as palavras já lidas
+    CHECK(end[1] == 6u);
+}
+
+TEST_CASE("SetFilterSubheaderConditions (0x42) é aceito e GetFilterSubheader (0x43) devolve os valores") {
+    CdRig rig("cd_subheader");
+    auto set = rig.cmd(0x4203, 0x1122, 0x0500 | 0x0007, 0x3344);   // filtro 5: canal 3, máscaras 0x11/0x22, nº de arquivo 7, valores 0x33/0x44
+    CHECK(set[0] != 0xFF00u);
+    CHECK((rig.hirq() & 0x40) != 0);                    // ESEL
+    auto get = rig.cmd(0x4300, 0, 0x0500, 0);
+    CHECK(get[0] != 0xFF00u);
+    CHECK(get[0] == uint16_t((0x01 << 8) | 0x03));      // status | canal
+    CHECK(get[1] == 0x3344u);                           // valores de submodo e codificação
+    CHECK(get[2] == 0x0007u);                           // nº de arquivo
+    CHECK(get[3] == 0x1122u);                           // máscaras
+}
+
+TEST_CASE("relatório periódico: no tick do SCDQ o drive reescreve CR1–CR4 com o status e o bit PERI (0x20)") {
+    CdRig rig("cd_peri");
+    auto reply = rig.cmd(0x0000);                       // GetStatus: resposta de comando, sem PERI
+    CHECK((reply[0] & 0x2000) == 0u);
+
+    rig.cd.advance(CdBlock::kCyclesPerSubcodeFrame);
+    const uint16_t cr1 = rig.cd.read(kCr1, 2);
+    CHECK((cr1 & 0x2000) != 0u);                        // PERI
+    CHECK((cr1 >> 8 & 0x0F) == 0x01u);                  // continua em pausa
+    CHECK(rig.cd.read(kCr4, 2) == kFadOffset);          // posição atual (FAD 150)
+}
+
+TEST_CASE("relatório periódico não corrompe a resposta de um comando recém-executado") {
+    CdRig rig("cd_peri2");
+    rig.cd.advance(CdBlock::kCyclesPerSubcodeFrame - 10);
+    rig.cd.write(kCr1, 2, 0x0000); rig.cd.write(kCr2, 2, 0); rig.cd.write(kCr3, 2, 0); rig.cd.write(kCr4, 2, 0);   // comando
+    rig.cd.advance(20);                                 // o tick cai logo após o comando
+    CHECK((rig.cd.read(kCr1, 2) & 0x2000) == 0u);       // a resposta do comando permanece intacta
+}
+
+TEST_CASE("SetCDDeviceConnection (0x30) sinaliza ESEL ao terminar, como as demais operações de seletor") {
+    CdRig rig("cd_esel30");
+    rig.cd.write(kHirq, 2, ~0x0040u & 0xFFFF);         // o software limpa o bit que vai esperar
+    CHECK((rig.hirq() & 0x0040) == 0u);
+    rig.cmd(0x3000, 0, 0x0000, 0);                      // conecta o CD ao filtro 0
+    CHECK((rig.hirq() & 0x0040) != 0u);
+}
+
+TEST_CASE("CalcActualSize (0x52) sinaliza ESEL quando termina o cálculo") {
+    CdRig rig("cd_esel52");
+    rig.cd.write(kHirq, 2, ~0x0040u & 0xFFFF);
+    rig.cmd(0x5200, 0, 0, 1);                           // calcula o tamanho de 1 setor a partir do 0
+    CHECK((rig.hirq() & 0x0040) != 0u);
+    auto size = rig.cmd(0x5300);                        // GetActualSize
+    CHECK(size[1] == 1024u);                            // 1 setor de 2048 bytes = 1024 palavras
 }

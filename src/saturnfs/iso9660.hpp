@@ -19,6 +19,9 @@ struct DirEntry {
     uint32_t lba;
     uint32_t size;
     bool is_directory;
+    // Como o CD block informa no Get File Info: atributo (bit 1 = diretório, bits 3–7 = atributos XA), unidade e intervalo de
+    // gravação intercalada e número de arquivo XA (0 sem a extensão XA).
+    uint8_t attributes = 0, unit_size = 0, gap_size = 0, file_number = 0;
 };
 
 // Registro do diretório raiz (a partir do descritor primário no setor 16).

@@ -10,7 +10,6 @@ namespace {
 constexpr size_t kHeaderBytes = 0x800;
 constexpr int kMaxStepIndex = 88;
 constexpr uint32_t kNoLoop = 0xFFFFFFFF;
-constexpr size_t kGroupBytes = 8;       // 4 bytes de L + 4 bytes de R
 constexpr size_t kBytesPerChannelGroup = 4;
 
 constexpr std::array<int, 89> kStepTable = {
@@ -40,7 +39,9 @@ int16_t decode_nibble(DviChannelState& s, unsigned nibble) {
 
 }  // namespace
 
-DviHeader parse_dvi_header(std::span<const uint8_t> file) {
+DviHeader parse_dvi_header(std::span<const uint8_t> file) { return parse_dvi_header(file, file.size()); }
+
+DviHeader parse_dvi_header(std::span<const uint8_t> file, uint64_t file_size) {
     if (file.size() < kHeaderBytes) throw std::runtime_error("arquivo DVI menor que o cabeçalho de 0x800 bytes");
     if (file[0] != 'D' || file[1] != 'V' || file[2] != 'I' || file[3] != '.') throw std::runtime_error("magic DVI. ausente");
 
@@ -49,7 +50,7 @@ DviHeader parse_dvi_header(std::span<const uint8_t> file) {
     h.body_size = be32(file, 8);
     if (uint32_t loop = be32(file, 0xC); loop != kNoLoop) h.loop_start_frames = loop;
     if (h.header_size != kHeaderBytes) throw std::runtime_error("tamanho de cabeçalho DVI inesperado: " + std::to_string(h.header_size));
-    if (uint64_t(h.header_size) + h.body_size != file.size())
+    if (uint64_t(h.header_size) + h.body_size != file_size)
         throw std::runtime_error("tamanho do corpo inconsistente com o tamanho do arquivo");
 
     h.channel[0] = {static_cast<int16_t>(be32(file, 0x10) >> 16), static_cast<int>(be32(file, 0x14))};
@@ -59,22 +60,23 @@ DviHeader parse_dvi_header(std::span<const uint8_t> file) {
     return h;
 }
 
-std::vector<int16_t> decode_dvi(std::span<const uint8_t> body, const DviHeader& header) {
-    const size_t groups = body.size() / kGroupBytes;
-    std::vector<int16_t> pcm;
-    pcm.reserve(groups * kBytesPerChannelGroup * 2 * 2);
-
-    DviChannelState left = header.channel[0];
-    DviChannelState right = header.channel[1];
-    for (size_t g = 0; g < groups; ++g) {
-        const uint8_t* l = body.data() + g * kGroupBytes;
+void decode_dvi_groups(std::span<const uint8_t> groups, DviChannelState (&state)[2], int16_t* out) {
+    for (size_t g = 0; g + kDviGroupBytes <= groups.size(); g += kDviGroupBytes) {
+        const uint8_t* l = groups.data() + g;
         const uint8_t* r = l + kBytesPerChannelGroup;
         for (size_t i = 0; i < kBytesPerChannelGroup; ++i)
             for (unsigned shift : {4u, 0u}) {
-                pcm.push_back(decode_nibble(left, (l[i] >> shift) & 0xF));
-                pcm.push_back(decode_nibble(right, (r[i] >> shift) & 0xF));
+                *out++ = decode_nibble(state[0], (l[i] >> shift) & 0xF);
+                *out++ = decode_nibble(state[1], (r[i] >> shift) & 0xF);
             }
     }
+}
+
+std::vector<int16_t> decode_dvi(std::span<const uint8_t> body, const DviHeader& header) {
+    const size_t groups = body.size() / kDviGroupBytes;
+    std::vector<int16_t> pcm(groups * kFramesPerGroup * 2);
+    DviChannelState state[2] = {header.channel[0], header.channel[1]};
+    decode_dvi_groups(body.first(groups * kDviGroupBytes), state, pcm.data());
     return pcm;
 }
 

@@ -8,7 +8,6 @@ namespace {
 constexpr int kVectorIllegal = 4;
 constexpr int kVectorSlotIllegal = 6;
 constexpr int kVectorAddressError = 9;
-constexpr int kNmiLevel = 16;
 constexpr uint32_t kExceptionCycles = 8;
 
 // Instruções que não podem estar num delay slot: desvios e TRAPA.
@@ -53,6 +52,8 @@ const OpcodeTable& Cpu::table() {
 
 Cpu::Cpu(saturn::Bus& bus, int id) : bus_(bus), id_(id) {
     onchip_.irq = [this](int level, int vector) { raise_interrupt(level, vector); };
+    onchip_.attach_bus(bus);
+    onchip_.set_slave(id != 0);
 }
 
 void Cpu::reset(uint32_t pc, uint32_t sp) {
@@ -60,6 +61,30 @@ void Cpu::reset(uint32_t pc, uint32_t sp) {
     s_.pc = pc;
     s_.r[15] = sp;
     s_.sr = kSrIMask;  // interrupções mascaradas (I = 15) após o reset
+    onchip_.reset();
+}
+
+void Cpu::save(saturn::StateWriter& w) const {
+    for (uint32_t v : s_.r) w.u32(v);
+    for (uint32_t v : {s_.pc, s_.pr, s_.gbr, s_.vbr, s_.mach, s_.macl, s_.sr, op_address_}) w.u32(v);
+    w.raw(cache_data_);
+    w.i32(pending_level_);
+    w.i32(pending_vector_);
+    w.boolean(sleeping_);
+    w.boolean(inhibit_irq_);
+    onchip_.save(w);
+}
+
+void Cpu::load(saturn::StateReader& r) {
+    for (uint32_t& v : s_.r) v = r.u32();
+    for (uint32_t* v : {&s_.pc, &s_.pr, &s_.gbr, &s_.vbr, &s_.mach, &s_.macl, &s_.sr, &op_address_}) *v = r.u32();
+    r.raw(cache_data_);
+    pending_level_ = r.i32();
+    pending_vector_ = r.i32();
+    sleeping_ = r.boolean();
+    inhibit_irq_ = r.boolean();
+    onchip_.load(r);
+    invalidate_fetch_cache();
 }
 
 // Mapa de áreas do SH-2 pelos 3 bits altos: 000/001 = memória (cache/sem cache), 010 = purga do cache, 011 = array de endereços do
@@ -136,13 +161,24 @@ bool Cpu::take_interrupt_if_due() {
     return true;
 }
 
+uint16_t Cpu::fetch16(uint32_t address) {
+    if ((address >> saturn::Bus::kPageShift) != fetch_tag_ || bus_.map_generation() != fetch_generation_) {
+        fetch_tag_ = address >> saturn::Bus::kPageShift;
+        fetch_generation_ = bus_.map_generation();
+        fetch_page_ = bus_.page_data(address);
+    }
+    if (!fetch_page_) return static_cast<uint16_t>(read(address, 2));
+    const uint32_t offset = address & saturn::Bus::kPageMask;
+    return static_cast<uint16_t>((fetch_page_[offset] << 8) | fetch_page_[offset + 1]);
+}
+
 uint32_t Cpu::delay_slot(uint32_t target) {
     const uint32_t slot_address = s_.pc;  // já aponta para a instrução depois do desvio
     const uint32_t branch_address = op_address_;
     if (slot_address & 1) throw Exception{kVectorAddressError, slot_address};
-    const uint16_t slot = static_cast<uint16_t>(read(slot_address, 2));
+    const uint16_t slot = fetch16(slot_address);
     if (is_slot_illegal(slot)) throw Exception{kVectorSlotIllegal, branch_address};
-    const OpHandler handler = table()[slot];
+    const OpHandler handler = table_[slot];
     if (!handler) throw Exception{kVectorIllegal, slot_address};
     if (recorder_) recorder_->record(slot_address);
 
@@ -163,9 +199,9 @@ uint32_t Cpu::step() {
     op_address_ = s_.pc;
     try {
         if (s_.pc & 1) throw Exception{kVectorAddressError, s_.pc};
-        const uint16_t op = bus_.read16(s_.pc);
+        const uint16_t op = fetch16(s_.pc);
         s_.pc += 2;
-        if (OpHandler handler = table()[op]) {
+        if (OpHandler handler = table_[op]) {
             if (recorder_) recorder_->record(op_address_);
             return handler(*this, op);
         }

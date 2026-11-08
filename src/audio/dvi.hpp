@@ -25,6 +25,17 @@ struct DviHeader {
 // header_size + body_size != tamanho do arquivo, ou índice de passo > 88.
 DviHeader parse_dvi_header(std::span<const uint8_t> file);
 
+// Igual à anterior, mas recebe só o começo do arquivo (pelo menos 0x800 bytes) e o tamanho total dele, para ler o cabeçalho sem
+// carregar o arquivo inteiro (usado pelo streaming da galeria).
+DviHeader parse_dvi_header(std::span<const uint8_t> file_start, uint64_t file_size);
+
+// Um grupo de 8 bytes (4 L + 4 R) vira 8 quadros estéreo (16 amostras).
+constexpr size_t kDviGroupBytes = 8, kFramesPerGroup = 8;
+
+// Decodificação incremental: decodifica grupos inteiros de 8 bytes (bytes finais incompletos são ignorados), atualizando o estado
+// dos dois canais, e grava 16 amostras intercaladas L,R por grupo em `out`.
+void decode_dvi_groups(std::span<const uint8_t> groups, DviChannelState (&state)[2], int16_t* out);
+
 // IMA ADPCM estéreo (grupos de 8 bytes = 4 bytes L + 4 bytes R, nibble alto primeiro). Devolve PCM 16 bits
 // intercalado L,R. Bytes finais que não completam um grupo de 8 são ignorados.
 std::vector<int16_t> decode_dvi(std::span<const uint8_t> body, const DviHeader& header);

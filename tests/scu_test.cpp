@@ -91,6 +91,46 @@ TEST_CASE("DMA nível 0 em modo direto copia N bytes e gera a interrupção de f
     CHECK(rig.delivered.back().vector == 0x4B);
 }
 
+TEST_CASE("DMA para o B-bus parte cada longword em duas escritas de 16 bits, avançando o destino de acordo com o valor de soma") {
+    ScuRig rig;
+    rig.bus.map_ram(0x05C00000, 0x1000, 0x1000);   // VRAM do VDP1 no B-bus
+    rig.bus.write32(0x06000100, 0x11112222);
+    rig.bus.write32(0x06000104, 0x33334444);
+    rig.scu.write(0x00, 4, 0x06000100);
+    rig.scu.write(0x04, 4, 0x25C00000);   // VRAM do VDP1 (B-bus)
+    rig.scu.write(0x08, 4, 8);
+    rig.scu.write(0x0C, 4, 0x0101);       // leitura +4, escrita +2 por palavra
+    rig.scu.write(0x14, 4, 0x7);
+    rig.scu.write(0x10, 4, 0x101);
+
+    CHECK(rig.bus.read16(0x25C00000) == 0x1111);
+    CHECK(rig.bus.read16(0x25C00002) == 0x2222);
+    CHECK(rig.bus.read16(0x25C00004) == 0x3333);
+    CHECK(rig.bus.read16(0x25C00006) == 0x4444);
+}
+
+TEST_CASE("DMA em modo indireto lê a tabela de (contagem, destino, origem) e para na entrada com o bit 31 da origem") {
+    ScuRig rig;
+    for (uint32_t i = 0; i < 8; i += 4) rig.bus.write32(0x06000100 + i, 0xAAAA0000u + i);     // origem 1: 8 bytes
+    rig.bus.write32(0x06000180, 0xBBBBBBBB);                                                  // origem 2: 4 bytes
+    const uint32_t table = 0x06000300;
+    rig.bus.write32(table + 0, 8);  rig.bus.write32(table + 4, 0x06000400);  rig.bus.write32(table + 8, 0x06000100);
+    rig.bus.write32(table + 12, 4); rig.bus.write32(table + 16, 0x06000500); rig.bus.write32(table + 20, 0x86000180);
+    rig.bus.write32(table + 24, 4); rig.bus.write32(table + 28, 0x06000600); rig.bus.write32(table + 32, 0x06000180);   // além do fim: não pode ser copiada
+
+    rig.scu.write(0x04, 4, table);        // D0W aponta para a tabela no modo indireto
+    rig.scu.write(0x0C, 4, 0x0102);       // D0AD: leitura +4, escrita +4
+    rig.scu.write(0x14, 4, 0x01000007);   // D0MD: indireto, fator de início por software
+    rig.scu.write(0x10, 4, 0x101);
+
+    CHECK(rig.bus.read32(0x06000400) == 0xAAAA0000u);
+    CHECK(rig.bus.read32(0x06000404) == 0xAAAA0004u);
+    CHECK(rig.bus.read32(0x06000500) == 0xBBBBBBBBu);
+    CHECK(rig.bus.read32(0x06000600) == 0u);
+    REQUIRE_FALSE(rig.delivered.empty());
+    CHECK(rig.delivered.back().vector == 0x4B);
+}
+
 TEST_CASE("Timer 0 dispara quando a contagem de HBlank-IN alcança T0C e zera no VBlank-OUT") {
     ScuRig rig;
     auto hblank = [&] { rig.scu.raise(Scu::Interrupt::HBlankIn); rig.scu.acknowledge(0x42); };  // um tratador real reconhece cada HBlank
@@ -132,32 +172,32 @@ struct TimingRig {
 };
 }  // namespace
 
-TEST_CASE("um quadro NTSC tem 262 linhas: 1 VBlank-IN, 1 VBlank-OUT e 262 HBlank-IN") {
+TEST_CASE("um quadro NTSC tem 263 linhas: 1 VBlank-IN, 1 VBlank-OUT e 263 HBlank-IN") {
     TimingRig rig;
-    rig.timing.advance(VideoTiming::kCyclesPerFrame);
+    rig.timing.advance(rig.timing.cycles_per_frame());
 
     CHECK(rig.vblank_in == 1);
     CHECK(rig.vblank_out == 1);
-    CHECK(rig.hblank_in == 262);
+    CHECK(rig.hblank_in == 263);
     CHECK(rig.timing.frame() == 1);
 }
 
 TEST_CASE("TVSTAT reflete VBLANK (bit 3) e HBLANK (bit 2) no instante certo") {
     TimingRig rig;
-    rig.timing.advance(10 * VideoTiming::kCyclesPerLine + 100);
+    rig.timing.advance(10 * rig.timing.cycles_per_line() + 100);
     CHECK((rig.timing.tvstat() & 0x0C) == 0);            // linha ativa, antes do HBlank
 
-    rig.timing.advance(VideoTiming::kHBlankStart);       // já dentro do HBlank da linha 10
+    rig.timing.advance(rig.timing.hblank_start());       // já dentro do HBlank da linha 10
     CHECK((rig.timing.tvstat() & 0x04) != 0);
 
     TimingRig vb;
-    vb.timing.advance(224 * VideoTiming::kCyclesPerLine + 10);
+    vb.timing.advance(224 * vb.timing.cycles_per_line() + 10);
     CHECK((vb.timing.tvstat() & 0x08) != 0);              // VBlank a partir da linha 224
 }
 
 TEST_CASE("TVSTAT é legível no mapa de E/S (VDP2 + 0x04)") {
     TimingRig rig;
-    rig.timing.advance(224 * VideoTiming::kCyclesPerLine + 10);
+    rig.timing.advance(224 * rig.timing.cycles_per_line() + 10);
     CHECK((rig.timing.read(0x04, 2) & 0x08) != 0);
     CHECK(rig.timing.read(0x00, 2) == 0u);
 }
@@ -168,4 +208,59 @@ TEST_CASE("VideoTiming guarda os registradores do VDP2 (exceto TVSTAT, que refle
     rig.timing.write(0x04, 2, 0xFFFF);    // TVSTAT é somente leitura: a escrita não vale
     CHECK(rig.timing.read(0x00, 2) == 0x8001u);
     CHECK((rig.timing.read(0x04, 2) & 0x0C) == 0u);
+}
+
+TEST_CASE("Tempo NTSC: 320 pontos (TVMD HRESO=0) usa 1708 ciclos por linha, 263 linhas e relógio de 26,85 MHz") {
+    TimingRig rig;
+    rig.timing.write(0x00, 2, 0x8000);   // 320x224
+    CHECK(rig.timing.cycles_per_line() == 1708);
+    CHECK(rig.timing.cycles_per_frame() == 263u * 1708);
+    CHECK(rig.timing.master_hz() == 26'846'590u);
+    rig.timing.advance(263u * 1708 - 1);
+    CHECK(rig.timing.frame() == 0);
+    rig.timing.advance(1);
+    CHECK(rig.timing.frame() == 1);
+    CHECK(rig.hblank_in == 263);
+}
+
+TEST_CASE("Tempo NTSC: 352 pontos (HRESO=1) usa 1820 ciclos por linha e relógio de 28,64 MHz") {
+    TimingRig rig;
+    rig.timing.write(0x00, 2, 0x8001);
+    CHECK(rig.timing.cycles_per_line() == 1820);
+    CHECK(rig.timing.master_hz() == 28'636'360u);
+    rig.timing.advance(263u * 1820);
+    CHECK(rig.timing.frame() == 1);
+}
+
+TEST_CASE("Tempo NTSC: o VBlank começa depois das linhas visíveis do VRESO (224 ou 240)") {
+    TimingRig r224;
+    r224.timing.write(0x00, 2, 0x8000);
+    r224.timing.advance(224u * 1708 - 1);
+    CHECK(r224.vblank_in == 0);
+    r224.timing.advance(1);
+    CHECK(r224.vblank_in == 1);
+
+    TimingRig r240;
+    r240.timing.write(0x00, 2, 0x8010);  // VRESO = 1: 240 linhas
+    r240.timing.advance(224u * 1708 + 10);
+    CHECK(r240.vblank_in == 0);
+    CHECK((r240.timing.tvstat() & 0x08) == 0);
+    r240.timing.advance(16u * 1708);
+    CHECK(r240.vblank_in == 1);
+    CHECK((r240.timing.tvstat() & 0x08) != 0);
+}
+
+TEST_CASE("Tempo NTSC: HBlank começa ao fim dos pontos ativos (320 → ciclo 1280; 352 → ciclo 1408)") {
+    TimingRig a;
+    a.timing.write(0x00, 2, 0x8000);
+    a.timing.advance(1279);
+    CHECK(a.hblank_in == 0);
+    a.timing.advance(1);
+    CHECK(a.hblank_in == 1);
+    TimingRig b;
+    b.timing.write(0x00, 2, 0x8001);
+    b.timing.advance(1407);
+    CHECK(b.hblank_in == 0);
+    b.timing.advance(1);
+    CHECK(b.hblank_in == 1);
 }
