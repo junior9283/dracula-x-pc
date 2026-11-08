@@ -15,6 +15,10 @@ public:
     uint32_t read(uint32_t offset, int bytes) override;
     void write(uint32_t offset, int bytes, uint32_t value) override;
 
+    // Armazenamento do byte de um registrador cuja leitura é uma cópia direta dele, sem efeito colateral nem dependência do tempo
+    // (TIER, FTCSR, TCR, TOCR); nullptr para os demais. Os laços ociosos da CPU vigiam esses bytes.
+    const uint8_t* stable_byte(uint32_t offset) const;
+
     // Avança o FRT em ciclos de CPU.
     void advance(uint64_t cycles);
     // Pino de captura de entrada do FRT (MINIT/SINIT): copia o FRC para o ICR e levanta ICF.

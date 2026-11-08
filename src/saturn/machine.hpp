@@ -87,6 +87,7 @@ private:
     mutable size_t last_state_size_ = 0;   // reserva para o próximo save (evita realocações de um bloco de ~4 MB)
     void apply_state(std::span<const uint8_t> payload);
     uint32_t execute_instruction();
+    bool both_idle();   // as CPUs ativas estão em laços ociosos válidos (ver sh2::Cpu::set_idle_skip)
     void advance_hardware(uint32_t cycles);
     uint32_t step_cpu(sh2::Cpu& cpu);
     void start_slave_when_ready();

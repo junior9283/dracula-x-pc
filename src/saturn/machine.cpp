@@ -287,6 +287,7 @@ void Machine::advance_hardware(uint32_t cycles) {
     scsp_.advance(cycles, timing_.master_hz());
     master_->onchip().advance(cycles);
     if (slave_running_) slave_->onchip().advance(cycles);
+    bus_.bump_epoch();   // o hardware (DMA, SCSP, CD...) pode ter escrito na memória: os laços ociosos das CPUs se revalidam
 }
 
 // Uma instrução do mestre (ou um gatilho HLE) e do escravo, sem avançar o resto do hardware.
@@ -306,8 +307,14 @@ uint32_t Machine::step_master() {
 // O BIOS real deixa o escravo esperando e salta para o ponto de entrada em 0x06000250 quando o jogo o registra.
 // Com a BIOS real a CPU sempre executa; sem ela, um gatilho HLE conta como 1 ciclo.
 uint32_t Machine::step_cpu(sh2::Cpu& cpu) {
-    const bool hle = !bios_rom_ && BiosHle::is_trap(cpu.state().pc) && bios_.handle(cpu);  // teste barato antes da chamada
-    return hle ? 1 : cpu.step();
+    if (cpu.idle_ready()) return cpu.idle_advance();   // laço de espera: nenhum gatilho HLE cai dentro dele
+    const bool hle = !bios_rom_ && BiosHle::is_trap(cpu.pc()) && bios_.handle(cpu);  // teste barato antes da chamada
+    if (hle) {
+        cpu.abort_record();
+        bus_.bump_epoch();
+        return 1;
+    }
+    return cpu.step();
 }
 
 void Machine::start_slave_when_ready() {
@@ -324,6 +331,10 @@ void Machine::step_slave(uint32_t master_cycles) {  // o escravo recebe os mesmo
         if (slave_awaiting_entry_) return;
     }
     slave_credit_ += master_cycles;
+    if (slave_->idle_ready()) {
+        slave_->idle_consume(slave_credit_);
+        return;
+    }
     try {
         while (slave_credit_ > 0) slave_credit_ -= step_cpu(*slave_);
     } catch (const MachineError& e) {  // no hardware a exceção prenderia só o escravo; o mestre segue
@@ -340,11 +351,37 @@ bool Machine::run_until_pc(uint32_t pc, uint64_t max_cycles) {
     return master_->state().pc == pc;
 }
 
+bool Machine::both_idle() {
+    if (!master_->idle_ready()) return false;
+    return !slave_running_ || (!slave_awaiting_entry_ && slave_->idle_ready());
+}
+
 void Machine::run_cycles(uint64_t cycles) {
+    // Laços de espera das CPUs são acelerados só aqui dentro; o hook por instrução do mestre exige ver cada passo.
+    const bool idle_skip = !on_before_master_step;
+    struct IdleScope {
+        sh2::Cpu &master, &slave;
+        ~IdleScope() { master.set_idle_skip(false); slave.set_idle_skip(false); }
+    } idle_scope{*master_, *slave_};
+    for (sh2::Cpu* cpu : {master_.get(), slave_.get()}) {
+        cpu->set_idle_skip(idle_skip);
+        if (!bios_rom_) cpu->set_idle_excluded_pcs(BiosHle::kTrapBase, BiosHle::kTrapEnd);
+    }
+    bus_.bump_epoch();   // a memória pode ter mudado fora daqui (carga, poke, save state)
     uint64_t done = 0;
     while (done < cycles) {
         uint32_t slice = 0;
-        while (slice < kSlice) slice += execute_instruction();
+        while (slice < kSlice) {
+            if (both_idle()) {   // as duas CPUs em laços de espera: a fatia inteira é só aritmética de ciclos (a memória só muda no hardware)
+                while (slice < kSlice) {
+                    const uint32_t cycles = master_->idle_advance();
+                    slice += cycles;
+                    if (slave_running_) slave_->idle_consume(slave_credit_ += cycles);
+                }
+                break;
+            }
+            slice += execute_instruction();
+        }
         advance_hardware(slice);   // o hardware avança em fatias: as interrupções chegam com até kSlice ciclos de atraso
         done += slice;
     }

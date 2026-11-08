@@ -38,10 +38,14 @@ constexpr bool to_physical(uint32_t& address) {
 // Toda remapeação passa aqui: invalida os atalhos de página (page_data) guardados pelas CPUs.
 Bus::Page& Bus::map_page(uint32_t address) {
     ++map_generation_;
+    ++epoch_;
     return storage_->pages.at(address >> S::kPageShift);
 }
 
-Bus::Bus() : storage_(std::make_unique<Storage>()) {}
+Bus::Bus()
+    : storage_(std::make_unique<Storage>()),
+      fast_read_(std::make_unique<const uint8_t*[]>(S::kAddressSpace >> S::kPageShift)),
+      fast_write_(std::make_unique<uint8_t*[]>(S::kAddressSpace >> S::kPageShift)) {}
 Bus::~Bus() = default;
 
 void Bus::map_ram(uint32_t base, uint32_t size, uint32_t mirror_span) {
@@ -53,6 +57,7 @@ void Bus::map_ram(uint32_t base, uint32_t size, uint32_t mirror_span) {
     for (uint32_t offset = 0; offset < mirror_span; offset += S::kPageSize) {
         Page& page = map_page(base + offset);
         page = Page{buffer.data() + offset % size, nullptr, 0, false, index};
+        sync_fast(base + offset);
     }
 }
 
@@ -62,15 +67,26 @@ void Bus::map_rom(uint32_t base, std::span<const uint8_t> data) {
     auto& buffer = storage_->buffers.emplace_back(padded, 0);
     storage_->is_rom.push_back(true);
     std::copy(data.begin(), data.end(), buffer.begin());
-    for (uint32_t offset = 0; offset < padded; offset += S::kPageSize)
+    for (uint32_t offset = 0; offset < padded; offset += S::kPageSize) {
         map_page(base + offset) = Page{buffer.data() + offset, nullptr, 0, true, UINT32_MAX};
+        sync_fast(base + offset);
+    }
 }
 
 void Bus::map_io(uint32_t base, uint32_t size, IoDevice& device) {
     if (!is_page_aligned(base)) throw std::invalid_argument("map_io: base precisa ser múltipla de 4 KiB");
     const uint32_t padded = (size + S::kPageMask) & ~S::kPageMask;
-    for (uint32_t offset = 0; offset < padded; offset += S::kPageSize)
+    for (uint32_t offset = 0; offset < padded; offset += S::kPageSize) {
         map_page(base + offset) = Page{nullptr, &device, offset, false, UINT32_MAX};
+        sync_fast(base + offset);
+    }
+}
+
+void Bus::sync_fast(uint32_t address) {
+    const uint32_t index = address >> S::kPageShift;
+    const Page& page = storage_->pages[index];
+    fast_read_[index] = page.data;
+    fast_write_[index] = page.read_only ? nullptr : page.data;
 }
 
 uint32_t Bus::unmapped(uint32_t address) {
@@ -103,6 +119,7 @@ uint32_t Bus::read(uint32_t address) {
 
 template <int Bytes>
 void Bus::write(uint32_t address, uint32_t value) {
+    ++epoch_;
     const uint32_t original = address;
     if (!to_physical(address)) { unmapped(original); return; }
 

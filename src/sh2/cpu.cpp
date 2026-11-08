@@ -57,6 +57,7 @@ Cpu::Cpu(saturn::Bus& bus, int id) : bus_(bus), id_(id) {
 }
 
 void Cpu::reset(uint32_t pc, uint32_t sp) {
+    reset_idle();
     s_ = {};
     s_.pc = pc;
     s_.r[15] = sp;
@@ -65,6 +66,7 @@ void Cpu::reset(uint32_t pc, uint32_t sp) {
 }
 
 void Cpu::save(saturn::StateWriter& w) const {
+    const_cast<Cpu*>(this)->leave_idle();   // o estado real vem da fase atual do laço ocioso
     for (uint32_t v : s_.r) w.u32(v);
     for (uint32_t v : {s_.pc, s_.pr, s_.gbr, s_.vbr, s_.mach, s_.macl, s_.sr, op_address_}) w.u32(v);
     w.raw(cache_data_);
@@ -85,11 +87,13 @@ void Cpu::load(saturn::StateReader& r) {
     inhibit_irq_ = r.boolean();
     onchip_.load(r);
     invalidate_fetch_cache();
+    reset_idle();
 }
 
 // Mapa de áreas do SH-2 pelos 3 bits altos: 000/001 = memória (cache/sem cache), 010 = purga do cache, 011 = array de endereços do
 // cache, 110 = array de dados do cache (RAM de 4 KiB), 111 = E/S interna (0xFFFFFE00+). Purga e array de endereços são ignorados.
-uint32_t Cpu::read(uint32_t a, int bytes) {
+uint32_t Cpu::read_slow(uint32_t a, int bytes) {
+    if (recording_ && !watch_read(a, bytes)) fail_record();   // leitura fora de RAM/ROM (E/S, E/S interna, cache...): não é laço ocioso
     if (a >= OnChip::kBase) return onchip_.read(a - OnChip::kBase, bytes);
     const uint32_t area = a >> 29;
     if (area == 2 || area == 3) return 0;
@@ -100,7 +104,8 @@ uint32_t Cpu::read(uint32_t a, int bytes) {
     }
     return bytes == 1 ? bus_.read8(a) : bytes == 2 ? bus_.read16(a) : bus_.read32(a);
 }
-void Cpu::write(uint32_t a, int bytes, uint32_t v) {
+void Cpu::write_slow(uint32_t a, int bytes, uint32_t v) {
+    if (recording_) fail_record();   // laço que escreve não é ocioso
     if (a >= OnChip::kBase) { onchip_.write(a - OnChip::kBase, bytes, v); return; }
     const uint32_t area = a >> 29;
     if (area == 2 || area == 3) return;
@@ -113,32 +118,12 @@ void Cpu::write(uint32_t a, int bytes, uint32_t v) {
     else bus_.write32(a, v);
 }
 
-uint32_t Cpu::load8u(uint32_t a) { return read(a, 1); }
-uint32_t Cpu::load8s(uint32_t a) { return static_cast<uint32_t>(static_cast<int32_t>(static_cast<int8_t>(read(a, 1)))); }
-uint32_t Cpu::load16s(uint32_t a) {
-    if (a & 1) throw Exception{kVectorAddressError, op_address_};
-    return static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(read(a, 2))));
-}
-uint32_t Cpu::load32(uint32_t a) {
-    if (a & 3) throw Exception{kVectorAddressError, op_address_};
-    return read(a, 4);
-}
-void Cpu::store8(uint32_t a, uint32_t v) { write(a, 1, v); }
-void Cpu::store16(uint32_t a, uint32_t v) {
-    if (a & 1) throw Exception{kVectorAddressError, op_address_};
-    write(a, 2, v);
-}
-void Cpu::store32(uint32_t a, uint32_t v) {
-    if (a & 3) throw Exception{kVectorAddressError, op_address_};
-    write(a, 4, v);
-}
-
 void Cpu::enter_exception(int vector, uint32_t saved_pc) {
     s_.r[15] -= 4;
-    write(s_.r[15], 4, s_.sr);
+    write<4>(s_.r[15], s_.sr);
     s_.r[15] -= 4;
-    write(s_.r[15], 4, saved_pc);
-    s_.pc = read(s_.vbr + static_cast<uint32_t>(vector) * 4, 4);
+    write<4>(s_.r[15], saved_pc);
+    s_.pc = read<4>(s_.vbr + static_cast<uint32_t>(vector) * 4);
 }
 
 void Cpu::raise_interrupt(int level, int vector) {
@@ -155,21 +140,17 @@ bool Cpu::take_interrupt_if_due() {
     const int level = pending_level_, vector = pending_vector_;
     pending_level_ = 0;
     sleeping_ = false;
+    abort_record();
     enter_exception(vector, s_.pc);
     s_.sr = (s_.sr & ~kSrIMask) | (static_cast<uint32_t>(level > 15 ? 15 : level) << 4);
     if (on_interrupt_taken) on_interrupt_taken(level, vector);
     return true;
 }
 
-uint16_t Cpu::fetch16(uint32_t address) {
-    if ((address >> saturn::Bus::kPageShift) != fetch_tag_ || bus_.map_generation() != fetch_generation_) {
-        fetch_tag_ = address >> saturn::Bus::kPageShift;
-        fetch_generation_ = bus_.map_generation();
-        fetch_page_ = bus_.page_data(address);
-    }
-    if (!fetch_page_) return static_cast<uint16_t>(read(address, 2));
-    const uint32_t offset = address & saturn::Bus::kPageMask;
-    return static_cast<uint16_t>((fetch_page_[offset] << 8) | fetch_page_[offset + 1]);
+void Cpu::refresh_fetch_page(uint32_t address) {
+    fetch_tag_ = address >> saturn::Bus::kPageShift;
+    fetch_generation_ = bus_.map_generation();
+    fetch_page_ = bus_.page_data(address);
 }
 
 uint32_t Cpu::delay_slot(uint32_t target) {
@@ -190,26 +171,12 @@ uint32_t Cpu::delay_slot(uint32_t target) {
     return cycles;
 }
 
-uint32_t Cpu::step() {
+bool Cpu::pre_step(uint32_t& cycles) {
     const bool inhibited = inhibit_irq_;
     inhibit_irq_ = false;
-    if (!inhibited && take_interrupt_if_due()) return kExceptionCycles;
-    if (sleeping_) return 1;  // parado até a próxima interrupção
-
-    op_address_ = s_.pc;
-    try {
-        if (s_.pc & 1) throw Exception{kVectorAddressError, s_.pc};
-        const uint16_t op = fetch16(s_.pc);
-        s_.pc += 2;
-        if (OpHandler handler = table_[op]) {
-            if (recorder_) recorder_->record(op_address_);
-            return handler(*this, op);
-        }
-        throw Exception{kVectorIllegal, op_address_};
-    } catch (const Exception& e) {
-            enter_exception(e.vector, e.saved_pc);
-    }
-    return kExceptionCycles;
+    if (!inhibited && take_interrupt_if_due()) { cycles = kExceptionCycles; return true; }
+    if (sleeping_) { cycles = 1; return true; }  // parado até a próxima interrupção
+    return false;
 }
 
 }  // namespace sh2

@@ -34,6 +34,16 @@ bool within_ticks(uint16_t from, uint16_t target, uint64_t ticks) {  // `target`
 
 }  // namespace
 
+const uint8_t* OnChip::stable_byte(uint32_t offset) const {
+    switch (offset) {
+        case kTier: return &tier_;
+        case kFtcsr: return &ftcsr_;
+        case kTcr: return &tcr_;
+        case kTocr: return &tocr_;
+        default: return nullptr;
+    }
+}
+
 void OnChip::advance(uint64_t cycles) {
     const uint32_t divider = frt_divider(tcr_);
     if (divider == 0) return;

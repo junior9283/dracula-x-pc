@@ -33,6 +33,16 @@ public:
     void map_rom(uint32_t base, std::span<const uint8_t> data);
     void map_io(uint32_t base, uint32_t size, IoDevice& device);
 
+    // Tabelas de ponteiros diretos por página física de 4 KiB (índice = (endereço & 0x1FFFFFFF) >> kPageShift; nullptr = não é RAM/ROM,
+    // ou, na de escrita, é ROM). Usadas pelo caminho rápido das CPUs; o acesso pelo barramento tem o mesmo efeito.
+    const uint8_t* const* fast_read_table() const { return fast_read_.get(); }
+    uint8_t* const* fast_write_table() const { return fast_write_.get(); }
+
+    // Época de escritas: aumenta a cada escrita de CPU, remapeamento e quando o hardware pode ter escrito na memória. Quem guarda
+    // um resultado derivado da memória (laços ociosos das CPUs) o revalida quando ela muda.
+    uint64_t epoch() const { return epoch_; }
+    void bump_epoch() { ++epoch_; }
+
     uint8_t read8(uint32_t address);
     uint16_t read16(uint32_t address);
     uint32_t read32(uint32_t address);
@@ -73,10 +83,15 @@ private:
     template <int Bytes> uint32_t read(uint32_t address);
     template <int Bytes> void write(uint32_t address, uint32_t value);
 
+    void sync_fast(uint32_t address);  // atualiza as tabelas de ponteiros diretos da página de `address`
+
     std::unique_ptr<Storage> storage_;
+    std::unique_ptr<const uint8_t*[]> fast_read_;
+    std::unique_ptr<uint8_t*[]> fast_write_;
     uint64_t unmapped_count_ = 0;
     std::optional<uint32_t> first_unmapped_;
     uint32_t map_generation_ = 0;
+    uint64_t epoch_ = 0;
     std::map<uint32_t, uint64_t> unmapped_pages_;
 };
 
