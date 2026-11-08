@@ -84,7 +84,7 @@ footer { margin-top: 48px; padding: 24px 0 40px; border-top: 1px solid var(--lin
       <div class="badges">
         <span class="badge">Linux x86_64</span>
         <span class="badge">Windows 64 bits</span>
-        <span class="badge">macOS: em preparação</span>
+        <span class="badge">macOS Intel e Apple Silicon</span>
         <span class="badge">Licença MIT</span>
         <span class="badge warn">Versão de teste (v0.2.0)</span>
       </div>
@@ -132,7 +132,7 @@ footer { margin-top: 48px; padding: 24px 0 40px; border-top: 1px solid var(--lin
     <tr><td>Linux x86_64</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.2.0/dracula-x-linux-x86_64.tar.gz">dracula-x-linux-x86_64.tar.gz</a></td><td>Pasta com a libSDL3 embutida.</td></tr>
     <tr><td>Windows 64 bits</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.2.0/Dracula-X-PC-Setup-x64.exe">Dracula-X-PC-Setup-x64.exe</a></td><td>Instalador com atalhos e desinstalador. Sem assinatura digital: o SmartScreen pode avisar.</td></tr>
     <tr><td>Windows 64 bits</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.2.0/dracula-x-windows-x64.zip">dracula-x-windows-x64.zip</a></td><td>Versão portátil.</td></tr>
-    <tr><td>macOS (Intel e Apple Silicon)</td><td><span class="tag no">ainda não</span></td><td>Os scripts existem, mas nunca rodaram num Mac. Veja <a href="#compilar">Compilar</a>.</td></tr>
+    <tr><td>macOS (Intel e Apple Silicon)</td><td><a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.2.0/Dracula-X-PC-macOS-universal.dmg">Dracula-X-PC-macOS-universal.dmg</a></td><td>Serve para qualquer Mac com macOS 11 ou mais novo. Há também versões só <a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.2.0/Dracula-X-PC-macOS-x86_64.dmg">Intel</a> e só <a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.2.0/Dracula-X-PC-macOS-arm64.dmg">Apple Silicon</a>. Não é notarizado: na primeira vez, clique com o botão direito e escolha “Abrir”. Os testes automáticos passam nas duas arquiteturas, mas ainda não foi aberto por uma pessoa num Mac.</td></tr>
   </table>
   <p>Conferir a integridade: <a href="https://github.com/junior9283/dracula-x-pc/releases/download/v0.2.0/SHA256SUMS.txt">SHA256SUMS.txt</a> · Todas as versões: <a href="https://github.com/junior9283/dracula-x-pc/releases">página de releases</a>.</p>
 </section>
@@ -217,7 +217,7 @@ dracula-x --help</code></pre>
     <tr><td>BIOS</td><td><span class="tag ok">por software</span> o BIOS real só é usado em validação local, nunca distribuído</td></tr>
     <tr><td>Frontend</td><td><span class="tag ok">completo</span> menu, save states, remapeamento, galeria, pacote local</td></tr>
     <tr><td>Recompilação estática (jogo nativo)</td><td><span class="tag no">não feita</span> é a meta de longo prazo: hoje todo o código do jogo é interpretado</td></tr>
-    <tr><td>macOS</td><td><span class="tag no">não testado</span> scripts prontos, sem Mac para validar</td></tr>
+    <tr><td>macOS</td><td><span class="tag part">testado só pela automação</span> compila e a suíte passa em Intel e Apple Silicon; ninguém abriu o app num Mac</td></tr>
   </table>
 
   <h3 id="limites">Limitações conhecidas</h3>
@@ -290,7 +290,7 @@ tools/package/build-windows-installer.sh  # instalador (precisa do makensis)</co
   <h3>macOS (Intel e Apple Silicon)</h3>
 <pre><code>brew install cmake ninja
 tools/package/build-macos.sh   # gera dist/Dracula-X-PC-macOS-{universal,x86_64,arm64}.dmg</code></pre>
-  <p>Ou, sem ter um Mac, use o fluxo <code>.github/workflows/macos.yml</code> no GitHub Actions. <strong>Esses scripts nunca foram executados num Mac</strong>; relatos de problemas são bem-vindos.</p>
+  <p>Ou, sem ter um Mac, use o fluxo <code>.github/workflows/macos.yml</code> no GitHub Actions, que gerou os <code>.dmg</code> da Release. <strong>O app ainda não foi aberto por uma pessoa num Mac</strong>; relatos de problemas são bem-vindos.</p>
   <h3>Ferramentas de linha de comando</h3>
   <table>
     <tr><td><code>dxpc-extract &lt;cue&gt; &lt;pasta&gt;</code></td><td>extrai os arquivos do disco e gera um manifesto</td></tr>

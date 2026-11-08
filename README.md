@@ -28,7 +28,7 @@ slot, F11 alterna tela cheia, F12 grava uma captura. As opções ficam em `dracu
 
 Pacotes de distribuição (sem dados do jogo), em `dist/`:
 - Linux: `tools/package/build-linux.sh` (tar.gz com a libSDL3 embutida) e `tools/package/build-appimage.sh` (`Dracula-X-PC-x86_64.AppImage`, arquivo único; baixa o `appimagetool` oficial para `build-appimage/` na primeira vez).
-- macOS: `tools/package/build-macos.sh` (num Mac; gera `Dracula-X-PC-macOS-{universal,x86_64,arm64}.dmg`) ou `.github/workflows/macos.yml` (compilação no GitHub Actions). Não testado em Mac real: veja `docs/analysis/08-port-pc.md`.
+- macOS: `tools/package/build-macos.sh` (num Mac; gera `Dracula-X-PC-macOS-{universal,x86_64,arm64}.dmg`) ou `.github/workflows/macos.yml` (compilação no GitHub Actions). Os `.dmg` da Release foram gerados pelo GitHub Actions (suíte passando em Intel e Apple Silicon); o app ainda não foi aberto em Mac real.
 - Windows: `tools/package/build-windows.sh` (zip portátil por cross-compilação mingw-w64; o SDL3 do Windows é baixado por `fetch-sdl3-mingw.sh`, sem root) e `tools/package/build-windows-installer.sh` (`Dracula-X-PC-Setup-x64.exe`, instalador NSIS; precisa do `makensis`).
 
 ## Ferramentas (linha de comando)
