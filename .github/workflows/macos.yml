@@ -1,4 +1,4 @@
-# Compila e empacota o port para macOS (universal, Intel e Apple Silicon) e roda os testes nas duas arquiteturas.
+# Compila e empacota o port para macOS (universal, Intel e Apple Silicon) e roda os testes.
 # Disparo manual (Actions > macOS > Run workflow) ou ao publicar uma tag "v*". Nenhum dado do jogo é usado ou distribuído.
 name: macOS
 
@@ -10,12 +10,13 @@ on:
 jobs:
   empacotar:
     name: Empacotar (universal, x86_64 e arm64)
-    runs-on: macos-14   # Apple Silicon; o Xcode compila as duas arquiteturas
+    # O runner Intel compila as duas arquiteturas (o Xcode gera o arm64 por cross-compilação); os testes rodam em x86_64 nativo.
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
       - name: Dependências
         run: brew install cmake ninja
-      - name: Compilar, testar (arm64) e gerar os .dmg
+      - name: Compilar, testar (x86_64) e gerar os .dmg
         run: tools/package/build-macos.sh
       - uses: actions/upload-artifact@v4
         with:
@@ -23,9 +24,10 @@ jobs:
           path: dist/*.dmg
           if-no-files-found: error
 
-  testes-intel:
-    name: Testes no Intel (x86_64 nativo)
-    runs-on: macos-15-intel
+  testes-apple-silicon:
+    name: Testes no Apple Silicon (arm64 nativo)
+    runs-on: macos-latest
+    continue-on-error: true   # este tipo de runner pode não estar disponível para a conta
     steps:
       - uses: actions/checkout@v4
       - name: Dependências
